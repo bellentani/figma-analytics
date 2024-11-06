@@ -84,6 +84,7 @@ async function extractDataToCSV(components, fileName) {
             { id: 'created_at', title: 'Created At' },
         ] : [
             { id: 'component_name', title: 'Component Name' },
+            { id: 'total_variants', title: 'Total Variants' },
             { id: 'updated_at', title: 'Updated At' },
             { id: 'created_at', title: 'Created At' },
         ],
@@ -120,15 +121,21 @@ async function generateComponentReport(fileIds) {
                 created_at: moment(component.created_at).format('YYYY-MM-DD'),
             }));
         } else {
-            const uniqueComponents = Array.from(new Set(components.map(component => component.containing_frame?.containingStateGroup?.name || component.name)));
-            componentsData = uniqueComponents.map(componentName => {
-                const component = components.find(c => (c.containing_frame?.containingStateGroup?.name || c.name) === componentName);
-                return {
-                    component_name: componentName,
-                    updated_at: moment(component.updated_at).format('YYYY-MM-DD'),
-                    created_at: moment(component.created_at).format('YYYY-MM-DD'),
-                };
-            });
+            const componentGroups = components.reduce((acc, component) => {
+                const componentName = component.containing_frame?.containingStateGroup?.name || component.name;
+                if (!acc[componentName]) {
+                    acc[componentName] = {
+                        component_name: componentName,
+                        total_variants: 0,
+                        updated_at: moment(component.updated_at).format('YYYY-MM-DD'),
+                        created_at: moment(component.created_at).format('YYYY-MM-DD'),
+                    };
+                }
+                acc[componentName].total_variants += 1;
+                return acc;
+            }, {});
+
+            componentsData = Object.values(componentGroups);
         }
 
         // Ordenar os componentes por nome

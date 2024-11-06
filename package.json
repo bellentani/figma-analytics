@@ -1,0 +1,17 @@
+{
+  "name": "figma-report-generator",
+  "version": "1.0.0",
+  "description": "A tool to generate reports from Figma libraries and export them as CSV.",
+  "main": "generateReport.js",
+  "scripts": {
+    "start": "node generateReport.js",
+    "generate-report": "node generateReport.js"
+  },
+  "author": "Seu Nome",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.27.2",
+    "csv-writer": "^1.6.0",
+    "moment": "^2.29.1"
+  }
+}

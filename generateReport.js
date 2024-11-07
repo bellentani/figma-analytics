@@ -1,39 +1,39 @@
-require('dotenv').config(); // Carrega as variáveis de ambiente do arquivo .env
+require('dotenv').config(); // Load environment variables from the .env file
 const axios = require('axios');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
-const moment = require('moment'); // Para manipulação de datas
+const moment = require('moment'); // For date manipulation
 const fs = require('fs');
-const { performance } = require('perf_hooks'); // Para medir o tempo de execução
-const cliProgress = require('cli-progress'); // Para barra de progresso
+const { performance } = require('perf_hooks'); // For measuring execution time
+const cliProgress = require('cli-progress'); // For progress bar
 
-// Configurações da API do Figma
+// Figma API settings
 const FIGMA_API_URL = 'https://api.figma.com/v1/files/';
 const FIGMA_ANALYTICS_URL = 'https://api.figma.com/v1/analytics/libraries/';
-const FIGMA_TOKEN = process.env.FIGMA_TOKEN; // Obtém o token da variável de ambiente
+const FIGMA_TOKEN = process.env.FIGMA_TOKEN; // Get the token from the environment variable
 
-// Verifique se o token foi carregado corretamente
+// Check if the token was loaded correctly
 if (!FIGMA_TOKEN) {
-    console.error('Erro: FIGMA_TOKEN não foi encontrado. Verifique o arquivo .env e o valor da variável de ambiente.');
+    console.error('Error: FIGMA_TOKEN not found. Check the .env file and the value of the environment variable.');
     process.exit(1);
 }
 
-// Apenas para depuração
+// Debugging parameter
 const args = process.argv.slice(2);
 const DEBUG = args.includes('--debug');
 if (DEBUG) {
-    console.log('Token Figma utilizado:', FIGMA_TOKEN);
+    console.log('Figma Token used:', FIGMA_TOKEN);
 }
 
-// Cria a pasta de relatórios se não existir
+// Create reports folder if it doesn't exist
 const REPORTS_DIR = './reports';
 if (!fs.existsSync(REPORTS_DIR)) {
     fs.mkdirSync(REPORTS_DIR);
 }
 
-// Parâmetro de debug e de variantes
+// Variant parameter
 const INCLUDE_VARIANTS = args.includes('--include-variants');
 
-// Parâmetro de período
+// Period parameter
 let period = '30days';
 const periodOptions = ['30days', '60days', '90days', '1year'];
 args.forEach(arg => {
@@ -42,10 +42,10 @@ args.forEach(arg => {
     }
 });
 
-// Remove '--debug', '--include-variants' e período dos argumentos se estiverem presentes
+// Remove '--debug', '--include-variants' and period from arguments if present
 const fileIds = args.filter(arg => arg !== '--debug' && arg !== '--include-variants' && !periodOptions.includes(arg));
 
-// Função para calcular datas de início com base no período
+// Function to calculate start dates based on the period
 function calculateStartDate(period) {
     let startDate;
     switch (period) {
@@ -66,7 +66,7 @@ function calculateStartDate(period) {
 
 const startDate = calculateStartDate(period);
 
-// Função para fazer a chamada de API ao endpoint Components
+// Function to make API call to Components endpoint
 async function fetchComponents(libraryFileKey) {
     try {
         const response = await axios.get(`${FIGMA_API_URL}${libraryFileKey}/components`, {
@@ -75,9 +75,9 @@ async function fetchComponents(libraryFileKey) {
             },
         });
 
-        // Exibir a resposta completa da API para diagnóstico
+        // Display the full API response for diagnosis
         if (DEBUG) {
-            console.log('Resposta completa da API de Components:', JSON.stringify(response.data, null, 2));
+            console.log('Full API response from Components:', JSON.stringify(response.data, null, 2));
         }
 
         if (response.data && response.data.meta && response.data.meta.components) {
@@ -86,26 +86,26 @@ async function fetchComponents(libraryFileKey) {
                 fileName: response.data.name,
             };
         } else {
-            console.warn(`Resposta inesperada ao buscar componentes do arquivo ${libraryFileKey}`);
+            console.warn(`Unexpected response when fetching components for file ${libraryFileKey}`);
             return { components: [], fileName: libraryFileKey };
         }
     } catch (error) {
         if (error.response) {
-            // A resposta foi recebida, mas o servidor respondeu com um status de erro
-            console.error(`Erro ao buscar componentes do arquivo ${libraryFileKey}: Status ${error.response.status}`);
-            console.error('Dados da resposta de erro:', JSON.stringify(error.response.data, null, 2));
+            // Response received, but server responded with an error status
+            console.error(`Error fetching components for file ${libraryFileKey}: Status ${error.response.status}`);
+            console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
         } else if (error.request) {
-            // A solicitação foi feita, mas não houve resposta
-            console.error('Nenhuma resposta recebida da API:', error.request);
+            // Request was made, but no response received
+            console.error('No response received from API:', error.request);
         } else {
-            // Algo deu errado na configuração da solicitação
-            console.error('Erro ao configurar a solicitação:', error.message);
+            // Something went wrong in setting up the request
+            console.error('Error setting up request:', error.message);
         }
         return { components: [], fileName: libraryFileKey };
     }
 }
 
-// Função para fazer a chamada de API ao endpoint Component Actions com paginação
+// Function to make API call to Component Actions endpoint with pagination
 async function fetchComponentActions(libraryFileKey) {
     let actions = [];
     let nextPage = true;
@@ -124,9 +124,9 @@ async function fetchComponentActions(libraryFileKey) {
                 },
             });
 
-            // Exibir a resposta completa da API para diagnóstico
+            // Display the full API response for diagnosis
             if (DEBUG) {
-                console.log('Resposta completa da API de Component Actions:', JSON.stringify(response.data, null, 2));
+                console.log('Full API response from Component Actions:', JSON.stringify(response.data, null, 2));
             }
 
             if (response.data && response.data.rows && Array.isArray(response.data.rows)) {
@@ -134,20 +134,20 @@ async function fetchComponentActions(libraryFileKey) {
                 nextPage = response.data.next_page;
                 cursor = response.data.cursor;
             } else {
-                console.warn(`Resposta inesperada ao buscar ações dos componentes para o arquivo ${libraryFileKey}`);
+                console.warn(`Unexpected response when fetching component actions for file ${libraryFileKey}`);
                 nextPage = false;
             }
         } catch (error) {
             if (error.response) {
-                // A resposta foi recebida, mas o servidor respondeu com um status de erro
-                console.error(`Erro ao buscar ações dos componentes para o arquivo ${libraryFileKey}: Status ${error.response.status}`);
-                console.error('Dados da resposta de erro:', JSON.stringify(error.response.data, null, 2));
+                // Response received, but server responded with an error status
+                console.error(`Error fetching component actions for file ${libraryFileKey}: Status ${error.response.status}`);
+                console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
             } else if (error.request) {
-                // A solicitação foi feita, mas não houve resposta
-                console.error('Nenhuma resposta recebida da API:', error.request);
+                // Request was made, but no response received
+                console.error('No response received from API:', error.request);
             } else {
-                // Algo deu errado na configuração da solicitação
-                console.error('Erro ao configurar a solicitação:', error.message);
+                // Something went wrong in setting up the request
+                console.error('Error setting up request:', error.message);
             }
             nextPage = false;
         }
@@ -156,7 +156,7 @@ async function fetchComponentActions(libraryFileKey) {
     return actions;
 }
 
-// Função para fazer a chamada de API ao endpoint Component Usages com paginação
+// Function to make API call to Component Usages endpoint with pagination
 async function fetchComponentUsages(libraryFileKey) {
     let usages = [];
     let nextPage = true;
@@ -174,9 +174,9 @@ async function fetchComponentUsages(libraryFileKey) {
                 },
             });
 
-            // Exibir a resposta completa da API para diagnóstico
+            // Display the full API response for diagnosis
             if (DEBUG) {
-                console.log('Resposta completa da API de Component Usages:', JSON.stringify(response.data, null, 2));
+                console.log('Full API response from Component Usages:', JSON.stringify(response.data, null, 2));
             }
 
             if (response.data && response.data.rows && Array.isArray(response.data.rows)) {
@@ -184,20 +184,20 @@ async function fetchComponentUsages(libraryFileKey) {
                 nextPage = response.data.next_page;
                 cursor = response.data.cursor;
             } else {
-                console.warn(`Resposta inesperada ao buscar usos dos componentes para o arquivo ${libraryFileKey}`);
+                console.warn(`Unexpected response when fetching component usages for file ${libraryFileKey}`);
                 nextPage = false;
             }
         } catch (error) {
             if (error.response) {
-                // A resposta foi recebida, mas o servidor respondeu com um status de erro
-                console.error(`Erro ao buscar usos dos componentes para o arquivo ${libraryFileKey}: Status ${error.response.status}`);
-                console.error('Dados da resposta de erro:', JSON.stringify(error.response.data, null, 2));
+                // Response received, but server responded with an error status
+                console.error(`Error fetching component usages for file ${libraryFileKey}: Status ${error.response.status}`);
+                console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
             } else if (error.request) {
-                // A solicitação foi feita, mas não houve resposta
-                console.error('Nenhuma resposta recebida da API:', error.request);
+                // Request was made, but no response received
+                console.error('No response received from API:', error.request);
             } else {
-                // Algo deu errado na configuração da solicitação
-                console.error('Erro ao configurar a solicitação:', error.message);
+                // Something went wrong in setting up the request
+                console.error('Error setting up request:', error.message);
             }
             nextPage = false;
         }
@@ -206,14 +206,14 @@ async function fetchComponentUsages(libraryFileKey) {
     return usages;
 }
 
-// Função para salvar os nomes dos componentes em um CSV
+// Function to save component names to a CSV
 async function extractDataToCSV(components, fileName) {
     if (components.length === 0) {
-        console.warn('Nenhum componente encontrado para gerar o CSV.');
+        console.warn('No components found to generate CSV.');
         return;
     }
 
-    // Ordenação dos componentes
+    // Sort components
     components.sort((a, b) => {
         const nameA = a.component_name.toLowerCase();
         const nameB = b.component_name.toLowerCase();
@@ -257,49 +257,49 @@ async function extractDataToCSV(components, fileName) {
 
     try {
         await csvWriter.writeRecords(components);
-        console.log(`Relatório CSV gerado com sucesso: ${REPORTS_DIR}/${fileName}.csv`);
+        console.log(`CSV report generated successfully: ${REPORTS_DIR}/${fileName}.csv`);
     } catch (error) {
-        console.error(`Erro ao escrever o arquivo CSV ${fileName}:`, error.message);
+        console.error(`Error writing CSV file ${fileName}:`, error.message);
     }
 }
 
-// Função para salvar um log em Markdown
+// Function to save a log in Markdown
 async function saveLogMarkdown(fileName, libraryName, totalComponents, totalVariants, executionTime, period, lastValidWeek) {
     const logFilePath = `${REPORTS_DIR}/${fileName}.md`;
-    const logContent = `# Relatório de Geração de CSV
+    const logContent = `# CSV Generation Report
 
-- **Nome da Biblioteca**: ${libraryName}
-- **Total de Componentes**: ${totalComponents}
-- **Total de Variantes**: ${totalVariants}
-- **Data da Geração**: ${moment().format('YYYY-MM-DD HH:mm:ss')}
-- **Período Selecionado**: ${period}
-- **Última Semana Válida Fechada**: ${lastValidWeek}
-- **Tempo Total de Execução**: ${executionTime} segundos
+- **Library Name**: ${libraryName}
+- **Total Components**: ${totalComponents}
+- **Total Variants**: ${totalVariants}
+- **Generation Date**: ${moment().format('YYYY-MM-DD HH:mm:ss')}
+- **Selected Period**: ${period}
+- **Last Valid Closed Week**: ${lastValidWeek}
+- **Total Execution Time**: ${executionTime} seconds
 `;
 
     try {
         fs.writeFileSync(logFilePath, logContent);
-        console.log(`Log de geração criado com sucesso: ${logFilePath}`);
+        console.log(`Generation log created successfully: ${logFilePath}`);
     } catch (error) {
-        console.error(`Erro ao escrever o arquivo de log ${logFilePath}:`, error.message);
+        console.error(`Error writing log file ${logFilePath}:`, error.message);
     }
 }
 
-// Função principal para gerar o relatório de componentes
+// Main function to generate the component report
 async function generateComponentReport(fileIds) {
     const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
     progressBar.start(fileIds.length, 0);
 
     for (const fileId of fileIds) {
         const startTime = performance.now();
-        console.log(`Processando o arquivo com ID: ${fileId}`);
+        console.log(`Processing file with ID: ${fileId}`);
 
         const { components, fileName: figmaFileName } = await fetchComponents(fileId);
         const componentActions = await fetchComponentActions(fileId);
         const componentUsages = await fetchComponentUsages(fileId);
 
         if (!components || components.length === 0) {
-            console.warn(`Nenhum componente encontrado no arquivo ${fileId}.`);
+            console.warn(`No components found in file ${fileId}.`);
             progressBar.increment();
             continue;
         }
@@ -307,7 +307,7 @@ async function generateComponentReport(fileIds) {
         const timestamp = moment().format('YYYY-MM-DD_HH_mm_ss');
         const fileName = `figma_lib_report_${figmaFileName}_${timestamp}`;
 
-        // Criar a estrutura para o CSV
+        // Create structure for CSV
         let componentsData;
         if (INCLUDE_VARIANTS) {
             componentsData = components.map(component => {
@@ -347,30 +347,30 @@ async function generateComponentReport(fileIds) {
             componentsData = Object.values(componentGroups);
         }
 
-        // Gerar CSV
+        // Generate CSV
         await extractDataToCSV(componentsData, fileName);
 
-        // Calcular tempo de execução
+        // Calculate execution time
         const endTime = performance.now();
         const executionTime = ((endTime - startTime) / 1000).toFixed(2);
 
-        // Última semana válida fechada
+        // Last valid closed week
         const lastValidWeek = moment().subtract(1, 'week').endOf('week').format('YYYY-MM-DD');
 
-        // Salvar log em Markdown
+        // Save log in Markdown
         await saveLogMarkdown(fileName, figmaFileName, components.length, componentsData.length, executionTime, period, lastValidWeek);
 
-        // Exibir informações no console
+        // Display summary information in the console
         console.log(`
---- Resumo do Relatório ---
+--- Report Summary ---
 `);
-        console.log(`Nome da Biblioteca: ${figmaFileName}`);
-        console.log(`Total de Componentes: ${components.length}`);
-        console.log(`Total de Variantes: ${componentsData.length}`);
-        console.log(`Data da Geração: ${moment().format('YYYY-MM-DD HH:mm:ss')}`);
-        console.log(`Período Selecionado: ${period}`);
-        console.log(`Última Semana Válida Fechada: ${lastValidWeek}`);
-        console.log(`Tempo Total de Execução: ${executionTime} segundos`);
+        console.log(`Library Name: ${figmaFileName}`);
+        console.log(`Total Components: ${components.length}`);
+        console.log(`Total Variants: ${componentsData.length}`);
+        console.log(`Generation Date: ${moment().format('YYYY-MM-DD HH:mm:ss')}`);
+        console.log(`Selected Period: ${period}`);
+        console.log(`Last Valid Closed Week: ${lastValidWeek}`);
+        console.log(`Total Execution Time: ${executionTime} seconds`);
 
         progressBar.increment();
     }
@@ -378,10 +378,10 @@ async function generateComponentReport(fileIds) {
     progressBar.stop();
 }
 
-// Iniciar o processo de geração de relatórios
+// Start the report generation process
 (async () => {
     if (fileIds.length === 0) {
-        console.error('Erro: Nenhum ID de arquivo fornecido. Informe pelo menos um ID de arquivo para gerar o relatório.');
+        console.error('Error: No file ID provided. Please provide at least one file ID to generate the report.');
         process.exit(1);
     }
     await generateComponentReport(fileIds);

@@ -17,8 +17,12 @@ if (!FIGMA_TOKEN) {
     process.exit(1);
 }
 
-// Apenas para depuração - certifique-se de remover isso depois!
-console.log('Token Figma utilizado:', FIGMA_TOKEN);
+// Apenas para depuração
+const args = process.argv.slice(2);
+const DEBUG = args.includes('--debug');
+if (DEBUG) {
+    console.log('Token Figma utilizado:', FIGMA_TOKEN);
+}
 
 // Cria a pasta de relatórios se não existir
 const REPORTS_DIR = './reports';
@@ -27,8 +31,6 @@ if (!fs.existsSync(REPORTS_DIR)) {
 }
 
 // Parâmetro de debug e de variantes
-const args = process.argv.slice(2);
-const DEBUG = args.includes('--debug');
 const INCLUDE_VARIANTS = args.includes('--include-variants');
 
 // Parâmetro de período

@@ -3,6 +3,7 @@ const axios = require('axios');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const moment = require('moment'); // Para manipulação de datas
 const fs = require('fs');
+const { performance } = require('perf_hooks'); // Para medir o tempo de execução
 
 // Configurações da API do Figma
 const FIGMA_API_URL = 'https://api.figma.com/v1/files/';
@@ -55,8 +56,8 @@ function calculateDateRange(period) {
             startDate = moment().subtract(1, 'year').format('YYYY-MM-DD');
             break;
         case 'custom':
-            // Custom logic can be implemented here if needed
-            startDate = moment().subtract(30, 'days').format('YYYY-MM-DD'); // Placeholder for custom logic
+            // Custom logic can be implemented aqui se necessário
+            startDate = moment().subtract(30, 'days').format('YYYY-MM-DD'); // Placeholder para lógica customizada
             break;
         default:
             startDate = moment().subtract(30, 'days').format('YYYY-MM-DD');
@@ -190,6 +191,26 @@ async function extractDataToCSV(components, fileName) {
         return;
     }
 
+    // Ordenação dos componentes
+    components.sort((a, b) => {
+        const nameA = a.component_name.toLowerCase();
+        const nameB = b.component_name.toLowerCase();
+        if (nameA.startsWith('🚫') && !nameB.startsWith('🚫')) return 1;
+        if (!nameA.startsWith('🚫') && nameB.startsWith('🚫')) return -1;
+        if (nameA < nameB) return -1;
+        if (nameA > nameB) return 1;
+        return 0;
+    });
+
+    if (INCLUDE_VARIANTS) {
+        components.sort((a, b) => {
+            if (a.component_name === b.component_name) {
+                return a.component_variant.toLowerCase().localeCompare(b.component_variant.toLowerCase());
+            }
+            return 0;
+        });
+    }
+
     const csvWriter = createCsvWriter({
         path: `${REPORTS_DIR}/${fileName}.csv`,
         header: INCLUDE_VARIANTS ? [
@@ -220,9 +241,31 @@ async function extractDataToCSV(components, fileName) {
     }
 }
 
+// Função para salvar um log em Markdown
+async function saveLogMarkdown(fileName, totalComponents, totalVariants, executionTime, period, lastValidWeek) {
+    const logFilePath = `${REPORTS_DIR}/${fileName}.md`;
+    const logContent = `# Relatório de Geração de CSV
+
+- **Total de Componentes**: ${totalComponents}
+- **Total de Variantes**: ${totalVariants}
+- **Data da Geração**: ${moment().format('YYYY-MM-DD HH:mm:ss')}
+- **Período Selecionado**: ${period}
+- **Última Semana Válida Fechada**: ${lastValidWeek}
+- **Tempo Total de Execução**: ${executionTime} segundos
+`;
+
+    try {
+        fs.writeFileSync(logFilePath, logContent);
+        console.log(`Log de geração criado com sucesso: ${logFilePath}`);
+    } catch (error) {
+        console.error(`Erro ao escrever o arquivo de log ${logFilePath}:`, error.message);
+    }
+}
+
 // Função principal para gerar o relatório de componentes
 async function generateComponentReport(fileIds) {
     for (const fileId of fileIds) {
+        const startTime = performance.now();
         console.log(`Processando o arquivo com ID: ${fileId}`);
 
         const components = await fetchComponents(fileId);
@@ -233,6 +276,9 @@ async function generateComponentReport(fileIds) {
             console.warn(`Nenhum componente encontrado no arquivo ${fileId}.`);
             continue;
         }
+
+        const timestamp = moment().format('YYYY-MM-DD_HH_mm_ss');
+        const fileName = `figma_lib_report_${fileId}_${timestamp}`;
 
         // Criar a estrutura para o CSV
         let componentsData;
@@ -260,54 +306,50 @@ async function generateComponentReport(fileIds) {
                     acc[componentName] = {
                         component_name: componentName,
                         total_variants: 0,
-                        insertions: relatedActions.reduce((sum, action) => sum + (action.insertions || 0), 0),
-                        detachments: relatedActions.reduce((sum, action) => sum + (action.detachments || 0), 0),
-                        usages: relatedUsages.reduce((sum, usage) => sum + (usage.usages || 0), 0),
+                        usages: relatedUsages.reduce((sum, u) => sum + (u.usages || 0), 0),
+                        insertions: relatedActions.reduce((sum, a) => sum + (a.insertions || 0), 0),
+                        detachments: relatedActions.reduce((sum, a) => sum + (a.detachments || 0), 0),
                         updated_at: moment(component.updated_at).format('YYYY-MM-DD'),
                         created_at: moment(component.created_at).format('YYYY-MM-DD'),
                     };
                 }
-                acc[componentName].total_variants += 1;
+                acc[componentName].total_variants++;
                 return acc;
             }, {});
 
             componentsData = Object.values(componentGroups);
         }
 
-        // Ordenar os componentes por nome, mantendo os que começam com "🚫" no final
-        componentsData.sort((a, b) => {
-            if (a.component_name.startsWith('🚫') && !b.component_name.startsWith('🚫')) {
-                return 1;
-            }
-            if (!a.component_name.startsWith('🚫') && b.component_name.startsWith('🚫')) {
-                return -1;
-            }
-            return a.component_name.localeCompare(b.component_name);
-        });
+        const endTime = performance.now();
+        const executionTime = ((endTime - startTime) / 1000).toFixed(2);
+        const lastValidWeek = endDate;
 
-        // Imprimindo os nomes dos componentes para diagnóstico
-        console.log('Componentes encontrados:');
-        componentsData.forEach(component => console.log(`- ${component.component_name}`));
+        // Extrair os dados para CSV
+        await extractDataToCSV(componentsData, fileName);
 
-        // Nome do arquivo CSV
-        const libraryName = `components_report_${fileId}_${getFormattedDate()}_${getFormattedTime()}`;
-        await extractDataToCSV(componentsData, libraryName);
+        // Salvar o log em Markdown
+        await saveLogMarkdown(fileName, components.length, INCLUDE_VARIANTS ? components.length : componentsData.length, executionTime, period, lastValidWeek);
+
+        // Exibir informações de log no console
+        console.log(`
+Resumo da geração do relatório:
+- Total de Componentes: ${components.length}
+- Total de Variantes: ${INCLUDE_VARIANTS ? components.length : componentsData.length}
+- Data da Geração: ${moment().format('YYYY-MM-DD HH:mm:ss')}
+- Período Selecionado: ${period}
+- Última Semana Válida Fechada: ${lastValidWeek}
+- Tempo Total de Execução: ${executionTime} segundos
+`);
+
+        console.log(`Processamento do arquivo ${fileId} concluído com sucesso.`);
     }
 }
 
-function getFormattedDate() {
-    return moment().format('YYYY-MM-DD'); // Formato de data: ano-mês-dia
-}
-
-function getFormattedTime() {
-    return moment().format('HH-mm'); // Formato de hora e minuto: hora-minuto
-}
-
-// Verifica se há arquivos fornecidos
-if (fileIds.length === 0) {
-    console.log('Por favor, forneça pelo menos um ID de arquivo como argumento.');
-    process.exit(1);
-}
-
-// Gera o relatório com os nomes dos componentes
-generateComponentReport(fileIds);
+// Executa a função principal
+(async () => {
+    if (fileIds.length === 0) {
+        console.error('Erro: Nenhum ID de arquivo fornecido. Forneça pelo menos um ID de arquivo do Figma.');
+        process.exit(1);
+    }
+    await generateComponentReport(fileIds);
+})();

@@ -64,6 +64,17 @@ node generateReport.js "custom[2024-08-01 2024-09-01]" your_file_key_here
 - **Data Sorting**: Components are sorted alphabetically, with those starting with the "🚫" emoji listed at the end.
 - **Detailed Debugging**: The `--debug` option allows you to see the full API responses for troubleshooting purposes.
 
+## Prerequisites
+- **Node.js**: Make sure you have Node.js installed.
+- **Figma API Token**: You need a Figma API token with the appropriate permissions (`library_analytics:read`). [Generate Figma API Key](https://www.figma.com/developers/api#access-tokens)
+
+## Notes
+- Ensure your Figma account has access to the files being queried, as the script respects the permissions of the user making the API request.
+- The API responses are paginated, and the script automatically handles pagination if there are more than 1,000 components.
+
+## License
+This project is licensed under the MIT License.
+
 ## [FUTURE] Project Structure
 
 To improve maintainability and scalability, the project is organized into several modules, each handling a specific responsibility.
@@ -120,15 +131,4 @@ figma-analytics/
 5. **Utilities (src/utils/)**:
    - **dateHelper.js**: Utility functions for handling date calculations and formatting.
    - **progressBar.js**: Manages the progress bar shown in the terminal during report generation.
-
-## Prerequisites
-- **Node.js**: Make sure you have Node.js installed.
-- **Figma API Token**: You need a Figma API token with the appropriate permissions (`library_analytics:read`). [Generate Figma API Key](https://www.figma.com/developers/api#access-tokens)
-
-## Notes
-- Ensure your Figma account has access to the files being queried, as the script respects the permissions of the user making the API request.
-- The API responses are paginated, and the script automatically handles pagination if there are more than 1,000 components.
-
-## License
-This project is licensed under the MIT License.
 

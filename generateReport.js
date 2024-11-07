@@ -66,6 +66,27 @@ function calculateStartDate(period) {
 
 const startDate = calculateStartDate(period);
 
+// Function to make API call to get file metadata (including the file name)
+async function fetchFileMetadata(libraryFileKey) {
+    try {
+        const response = await axios.get(`${FIGMA_API_URL}${libraryFileKey}`, {
+            headers: {
+                'X-Figma-Token': FIGMA_TOKEN,
+            },
+        });
+
+        if (response.data && response.data.name) {
+            return response.data.name;
+        } else {
+            console.warn(`Unexpected response when fetching metadata for file ${libraryFileKey}`);
+            return 'Unknown_Library_Name';
+        }
+    } catch (error) {
+        console.error(`Error fetching file metadata for file ${libraryFileKey}:`, error.message);
+        return 'Unknown_Library_Name';
+    }
+}
+
 // Function to make API call to Components endpoint
 async function fetchComponents(libraryFileKey) {
     try {
@@ -81,13 +102,10 @@ async function fetchComponents(libraryFileKey) {
         }
 
         if (response.data && response.data.meta && response.data.meta.components) {
-            return {
-                components: response.data.meta.components,
-                fileName: response.data.name,
-            };
+            return response.data.meta.components;
         } else {
             console.warn(`Unexpected response when fetching components for file ${libraryFileKey}`);
-            return { components: [], fileName: libraryFileKey };
+            return [];
         }
     } catch (error) {
         if (error.response) {
@@ -101,7 +119,7 @@ async function fetchComponents(libraryFileKey) {
             // Something went wrong in setting up the request
             console.error('Error setting up request:', error.message);
         }
-        return { components: [], fileName: libraryFileKey };
+        return [];
     }
 }
 
@@ -225,7 +243,7 @@ async function extractDataToCSV(components, fileName) {
     });
 
     if (INCLUDE_VARIANTS) {
-        components.sort((a, b) => {
+        components.sort((a,b) => {
             if (a.component_name === b.component_name) {
                 return a.component_variant.toLowerCase().localeCompare(b.component_variant.toLowerCase());
             }
@@ -241,7 +259,7 @@ async function extractDataToCSV(components, fileName) {
             { id: 'component_key', title: 'Component Key' },
             { id: 'usages', title: 'Usages' },
             { id: 'insertions', title: 'Insertions' },
-            { id: 'detachments', title: 'Detachments' },
+            { id: 'detachments', title: 'Detatchs' },
             { id: 'updated_at', title: 'Updated At' },
             { id: 'created_at', title: 'Created At' },
         ] : [
@@ -249,7 +267,7 @@ async function extractDataToCSV(components, fileName) {
             { id: 'total_variants', title: 'Total Variants' },
             { id: 'usages', title: 'Usages' },
             { id: 'insertions', title: 'Insertions' },
-            { id: 'detachments', title: 'Detachments' },
+            { id: 'detachments', title: 'Detatchs' },
             { id: 'updated_at', title: 'Updated At' },
             { id: 'created_at', title: 'Created At' },
         ],
@@ -257,35 +275,13 @@ async function extractDataToCSV(components, fileName) {
 
     try {
         await csvWriter.writeRecords(components);
-        console.log(`CSV report generated successfully: ${REPORTS_DIR}/${fileName}.csv`);
+        console.log(`CSV report successfully generated: ${REPORTS_DIR}/${fileName}.csv`);
     } catch (error) {
         console.error(`Error writing CSV file ${fileName}:`, error.message);
     }
 }
 
-// Function to save a log in Markdown
-async function saveLogMarkdown(fileName, libraryName, totalComponents, totalVariants, executionTime, period, lastValidWeek) {
-    const logFilePath = `${REPORTS_DIR}/${fileName}.md`;
-    const logContent = `# CSV Generation Report
-
-- **Library Name**: ${libraryName}
-- **Total Components**: ${totalComponents}
-- **Total Variants**: ${totalVariants}
-- **Generation Date**: ${moment().format('YYYY-MM-DD HH:mm:ss')}
-- **Selected Period**: ${period}
-- **Last Valid Closed Week**: ${lastValidWeek}
-- **Total Execution Time**: ${executionTime} seconds
-`;
-
-    try {
-        fs.writeFileSync(logFilePath, logContent);
-        console.log(`Generation log created successfully: ${logFilePath}`);
-    } catch (error) {
-        console.error(`Error writing log file ${logFilePath}:`, error.message);
-    }
-}
-
-// Main function to generate the component report
+// Main function to generate component report
 async function generateComponentReport(fileIds) {
     const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
     progressBar.start(fileIds.length, 0);
@@ -294,20 +290,21 @@ async function generateComponentReport(fileIds) {
         const startTime = performance.now();
         console.log(`Processing file with ID: ${fileId}`);
 
-        const { components, fileName: figmaFileName } = await fetchComponents(fileId);
+        const libraryName = await fetchFileMetadata(fileId);
+        const components = await fetchComponents(fileId);
         const componentActions = await fetchComponentActions(fileId);
         const componentUsages = await fetchComponentUsages(fileId);
 
         if (!components || components.length === 0) {
-            console.warn(`No components found in file ${fileId}.`);
+            console.warn(`No components found for file ${fileId}.`);
             progressBar.increment();
             continue;
         }
 
         const timestamp = moment().format('YYYY-MM-DD_HH_mm_ss');
-        const fileName = `figma_lib_report_${figmaFileName}_${timestamp}`;
+        const fileName = `figma_lib_report_${libraryName}_${timestamp}`;
 
-        // Create structure for CSV
+        // Create data structure for CSV
         let componentsData;
         if (INCLUDE_VARIANTS) {
             componentsData = components.map(component => {
@@ -354,22 +351,15 @@ async function generateComponentReport(fileIds) {
         const endTime = performance.now();
         const executionTime = ((endTime - startTime) / 1000).toFixed(2);
 
-        // Last valid closed week
-        const lastValidWeek = moment().subtract(1, 'week').endOf('week').format('YYYY-MM-DD');
-
-        // Save log in Markdown
-        await saveLogMarkdown(fileName, figmaFileName, components.length, componentsData.length, executionTime, period, lastValidWeek);
-
-        // Display summary information in the console
+        // Log report generation
         console.log(`
 --- Report Summary ---
 `);
-        console.log(`Library Name: ${figmaFileName}`);
+        console.log(`Library Name: ${libraryName}`);
         console.log(`Total Components: ${components.length}`);
         console.log(`Total Variants: ${componentsData.length}`);
         console.log(`Generation Date: ${moment().format('YYYY-MM-DD HH:mm:ss')}`);
         console.log(`Selected Period: ${period}`);
-        console.log(`Last Valid Closed Week: ${lastValidWeek}`);
         console.log(`Total Execution Time: ${executionTime} seconds`);
 
         progressBar.increment();
@@ -378,10 +368,10 @@ async function generateComponentReport(fileIds) {
     progressBar.stop();
 }
 
-// Start the report generation process
+// Start generating reports
 (async () => {
     if (fileIds.length === 0) {
-        console.error('Error: No file ID provided. Please provide at least one file ID to generate the report.');
+        console.error('Error: No file ID provided. Provide at least one file ID to generate the report.');
         process.exit(1);
     }
     await generateComponentReport(fileIds);

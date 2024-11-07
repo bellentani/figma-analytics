@@ -4,6 +4,7 @@ const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const moment = require('moment'); // Para manipulação de datas
 const fs = require('fs');
 const { performance } = require('perf_hooks'); // Para medir o tempo de execução
+const cliProgress = require('cli-progress'); // Para barra de progresso
 
 // Configurações da API do Figma
 const FIGMA_API_URL = 'https://api.figma.com/v1/files/';
@@ -83,10 +84,13 @@ async function fetchComponents(libraryFileKey) {
         }
 
         if (response.data && response.data.meta && response.data.meta.components) {
-            return response.data.meta.components;
+            return {
+                components: response.data.meta.components,
+                fileName: response.data.name,
+            };
         } else {
             console.warn(`Resposta inesperada ao buscar componentes do arquivo ${libraryFileKey}`);
-            return [];
+            return { components: [], fileName: libraryFileKey };
         }
     } catch (error) {
         if (error.response) {
@@ -100,7 +104,7 @@ async function fetchComponents(libraryFileKey) {
             // Algo deu errado na configuração da solicitação
             console.error('Erro ao configurar a solicitação:', error.message);
         }
-        return [];
+        return { components: [], fileName: libraryFileKey };
     }
 }
 
@@ -242,10 +246,11 @@ async function extractDataToCSV(components, fileName) {
 }
 
 // Função para salvar um log em Markdown
-async function saveLogMarkdown(fileName, totalComponents, totalVariants, executionTime, period, lastValidWeek) {
+async function saveLogMarkdown(fileName, libraryName, totalComponents, totalVariants, executionTime, period, lastValidWeek) {
     const logFilePath = `${REPORTS_DIR}/${fileName}.md`;
     const logContent = `# Relatório de Geração de CSV
 
+- **Nome da Biblioteca**: ${libraryName}
 - **Total de Componentes**: ${totalComponents}
 - **Total de Variantes**: ${totalVariants}
 - **Data da Geração**: ${moment().format('YYYY-MM-DD HH:mm:ss')}
@@ -264,21 +269,25 @@ async function saveLogMarkdown(fileName, totalComponents, totalVariants, executi
 
 // Função principal para gerar o relatório de componentes
 async function generateComponentReport(fileIds) {
+    const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+    progressBar.start(fileIds.length, 0);
+
     for (const fileId of fileIds) {
         const startTime = performance.now();
         console.log(`Processando o arquivo com ID: ${fileId}`);
 
-        const components = await fetchComponents(fileId);
+        const { components, fileName: figmaFileName } = await fetchComponents(fileId);
         const componentActions = await fetchComponentActions(fileId);
         const componentUsages = await fetchComponentUsages(fileId);
 
         if (!components || components.length === 0) {
             console.warn(`Nenhum componente encontrado no arquivo ${fileId}.`);
+            progressBar.increment();
             continue;
         }
 
         const timestamp = moment().format('YYYY-MM-DD_HH_mm_ss');
-        const fileName = `figma_lib_report_${fileId}_${timestamp}`;
+        const fileName = `figma_lib_report_${figmaFileName}_${timestamp}`;
 
         // Criar a estrutura para o CSV
         let componentsData;
@@ -320,36 +329,43 @@ async function generateComponentReport(fileIds) {
             componentsData = Object.values(componentGroups);
         }
 
-        const endTime = performance.now();
-        const executionTime = ((endTime - startTime) / 1000).toFixed(2);
-        const lastValidWeek = endDate;
-
-        // Extrair os dados para CSV
+        // Gerar CSV
         await extractDataToCSV(componentsData, fileName);
 
-        // Salvar o log em Markdown
-        await saveLogMarkdown(fileName, components.length, INCLUDE_VARIANTS ? components.length : componentsData.length, executionTime, period, lastValidWeek);
+        // Calcular tempo de execução
+        const endTime = performance.now();
+        const executionTime = ((endTime - startTime) / 1000).toFixed(2);
 
-        // Exibir informações de log no console
+        // Última semana válida fechada
+        const lastValidWeek = moment().subtract(1, 'week').endOf('week').format('YYYY-MM-DD');
+
+        // Salvar log em Markdown
+        await saveLogMarkdown(fileName, figmaFileName, components.length, componentsData.length, executionTime, period, lastValidWeek);
+
+        // Exibir informações no console
         console.log(`
-Resumo da geração do relatório:
-- Total de Componentes: ${components.length}
-- Total de Variantes: ${INCLUDE_VARIANTS ? components.length : componentsData.length}
-- Data da Geração: ${moment().format('YYYY-MM-DD HH:mm:ss')}
-- Período Selecionado: ${period}
-- Última Semana Válida Fechada: ${lastValidWeek}
-- Tempo Total de Execução: ${executionTime} segundos
+--- Resumo do Relatório ---
 `);
+        console.log(`Nome da Biblioteca: ${figmaFileName}`);
+        console.log(`Total de Componentes: ${components.length}`);
+        console.log(`Total de Variantes: ${componentsData.length}`);
+        console.log(`Data da Geração: ${moment().format('YYYY-MM-DD HH:mm:ss')}`);
+        console.log(`Período Selecionado: ${period}`);
+        console.log(`Última Semana Válida Fechada: ${lastValidWeek}`);
+        console.log(`Tempo Total de Execução: ${executionTime} segundos`);
 
-        console.log(`Processamento do arquivo ${fileId} concluído com sucesso.`);
+        progressBar.increment();
     }
+
+    progressBar.stop();
 }
 
-// Executa a função principal
+// Iniciar o processo de geração de relatórios
 (async () => {
     if (fileIds.length === 0) {
-        console.error('Erro: Nenhum ID de arquivo fornecido. Forneça pelo menos um ID de arquivo do Figma.');
+        console.error('Erro: Nenhum ID de arquivo fornecido. Informe pelo menos um ID de arquivo para gerar o relatório.');
         process.exit(1);
     }
     await generateComponentReport(fileIds);
 })();
+

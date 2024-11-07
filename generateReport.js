@@ -43,31 +43,26 @@ args.forEach(arg => {
 // Remove '--debug', '--include-variants' e período dos argumentos se estiverem presentes
 const fileIds = args.filter(arg => arg !== '--debug' && arg !== '--include-variants' && !periodOptions.includes(arg));
 
-// Função para calcular datas de início e fim com base no período
-function calculateDateRange(period) {
-    let startDate, endDate;
+// Função para calcular datas de início com base no período
+function calculateStartDate(period) {
+    let startDate;
     switch (period) {
         case '60days':
-            startDate = moment().subtract(60, 'days').format('YYYY-MM-DD');
+            startDate = moment().subtract(60, 'days').startOf('week').format('YYYY-MM-DD');
             break;
         case '90days':
-            startDate = moment().subtract(90, 'days').format('YYYY-MM-DD');
+            startDate = moment().subtract(90, 'days').startOf('week').format('YYYY-MM-DD');
             break;
         case '1year':
-            startDate = moment().subtract(1, 'year').format('YYYY-MM-DD');
-            break;
-        case 'custom':
-            // Custom logic can be implemented aqui se necessário
-            startDate = moment().subtract(30, 'days').format('YYYY-MM-DD'); // Placeholder para lógica customizada
+            startDate = moment().subtract(1, 'year').startOf('week').format('YYYY-MM-DD');
             break;
         default:
-            startDate = moment().subtract(30, 'days').format('YYYY-MM-DD');
+            startDate = moment().subtract(30, 'days').startOf('week').format('YYYY-MM-DD');
     }
-    endDate = moment().format('YYYY-MM-DD');
-    return { startDate, endDate };
+    return startDate;
 }
 
-const { startDate, endDate } = calculateDateRange(period);
+const startDate = calculateStartDate(period);
 
 // Função para fazer a chamada de API ao endpoint Components
 async function fetchComponents(libraryFileKey) {
@@ -108,84 +103,105 @@ async function fetchComponents(libraryFileKey) {
     }
 }
 
-// Função para fazer a chamada de API ao endpoint Component Actions
+// Função para fazer a chamada de API ao endpoint Component Actions com paginação
 async function fetchComponentActions(libraryFileKey) {
-    try {
-        const response = await axios.get(`${FIGMA_ANALYTICS_URL}${libraryFileKey}/component/actions`, {
-            headers: {
-                'X-Figma-Token': FIGMA_TOKEN,
-            },
-            params: {
-                group_by: 'component',
-                start_date: startDate,
-                end_date: endDate,
-            },
-        });
+    let actions = [];
+    let nextPage = true;
+    let cursor = null;
 
-        // Exibir a resposta completa da API para diagnóstico
-        if (DEBUG) {
-            console.log('Resposta completa da API de Component Actions:', JSON.stringify(response.data, null, 2));
-        }
+    while (nextPage) {
+        try {
+            const response = await axios.get(`${FIGMA_ANALYTICS_URL}${libraryFileKey}/component/actions`, {
+                headers: {
+                    'X-Figma-Token': FIGMA_TOKEN,
+                },
+                params: {
+                    group_by: 'component',
+                    start_date: startDate,
+                    cursor: cursor,
+                },
+            });
 
-        if (response.data && response.data.rows && Array.isArray(response.data.rows)) {
-            return response.data.rows;
-        } else {
-            console.warn(`Resposta inesperada ao buscar ações dos componentes para o arquivo ${libraryFileKey}`);
-            return [];
+            // Exibir a resposta completa da API para diagnóstico
+            if (DEBUG) {
+                console.log('Resposta completa da API de Component Actions:', JSON.stringify(response.data, null, 2));
+            }
+
+            if (response.data && response.data.rows && Array.isArray(response.data.rows)) {
+                actions = actions.concat(response.data.rows);
+                nextPage = response.data.next_page;
+                cursor = response.data.cursor;
+            } else {
+                console.warn(`Resposta inesperada ao buscar ações dos componentes para o arquivo ${libraryFileKey}`);
+                nextPage = false;
+            }
+        } catch (error) {
+            if (error.response) {
+                // A resposta foi recebida, mas o servidor respondeu com um status de erro
+                console.error(`Erro ao buscar ações dos componentes para o arquivo ${libraryFileKey}: Status ${error.response.status}`);
+                console.error('Dados da resposta de erro:', JSON.stringify(error.response.data, null, 2));
+            } else if (error.request) {
+                // A solicitação foi feita, mas não houve resposta
+                console.error('Nenhuma resposta recebida da API:', error.request);
+            } else {
+                // Algo deu errado na configuração da solicitação
+                console.error('Erro ao configurar a solicitação:', error.message);
+            }
+            nextPage = false;
         }
-    } catch (error) {
-        if (error.response) {
-            // A resposta foi recebida, mas o servidor respondeu com um status de erro
-            console.error(`Erro ao buscar ações dos componentes para o arquivo ${libraryFileKey}: Status ${error.response.status}`);
-            console.error('Dados da resposta de erro:', JSON.stringify(error.response.data, null, 2));
-        } else if (error.request) {
-            // A solicitação foi feita, mas não houve resposta
-            console.error('Nenhuma resposta recebida da API:', error.request);
-        } else {
-            // Algo deu errado na configuração da solicitação
-            console.error('Erro ao configurar a solicitação:', error.message);
-        }
-        return [];
     }
+
+    return actions;
 }
 
-// Função para fazer a chamada de API ao endpoint Component Usages
+// Função para fazer a chamada de API ao endpoint Component Usages com paginação
 async function fetchComponentUsages(libraryFileKey) {
-    try {
-        const response = await axios.get(`${FIGMA_ANALYTICS_URL}${libraryFileKey}/component/usages`, {
-            headers: {
-                'X-Figma-Token': FIGMA_TOKEN,
-            },
-            params: {
-                group_by: 'component',
-            },
-        });
+    let usages = [];
+    let nextPage = true;
+    let cursor = null;
 
-        // Exibir a resposta completa da API para diagnóstico
-        if (DEBUG) {
-            console.log('Resposta completa da API de Component Usages:', JSON.stringify(response.data, null, 2));
-        }
+    while (nextPage) {
+        try {
+            const response = await axios.get(`${FIGMA_ANALYTICS_URL}${libraryFileKey}/component/usages`, {
+                headers: {
+                    'X-Figma-Token': FIGMA_TOKEN,
+                },
+                params: {
+                    group_by: 'component',
+                    cursor: cursor,
+                },
+            });
 
-        if (response.data && response.data.rows && Array.isArray(response.data.rows)) {
-            return response.data.rows;
-        } else {
-            console.warn(`Resposta inesperada ao buscar usos dos componentes para o arquivo ${libraryFileKey}`);
-            return [];
+            // Exibir a resposta completa da API para diagnóstico
+            if (DEBUG) {
+                console.log('Resposta completa da API de Component Usages:', JSON.stringify(response.data, null, 2));
+            }
+
+            if (response.data && response.data.rows && Array.isArray(response.data.rows)) {
+                usages = usages.concat(response.data.rows);
+                nextPage = response.data.next_page;
+                cursor = response.data.cursor;
+            } else {
+                console.warn(`Resposta inesperada ao buscar usos dos componentes para o arquivo ${libraryFileKey}`);
+                nextPage = false;
+            }
+        } catch (error) {
+            if (error.response) {
+                // A resposta foi recebida, mas o servidor respondeu com um status de erro
+                console.error(`Erro ao buscar usos dos componentes para o arquivo ${libraryFileKey}: Status ${error.response.status}`);
+                console.error('Dados da resposta de erro:', JSON.stringify(error.response.data, null, 2));
+            } else if (error.request) {
+                // A solicitação foi feita, mas não houve resposta
+                console.error('Nenhuma resposta recebida da API:', error.request);
+            } else {
+                // Algo deu errado na configuração da solicitação
+                console.error('Erro ao configurar a solicitação:', error.message);
+            }
+            nextPage = false;
         }
-    } catch (error) {
-        if (error.response) {
-            // A resposta foi recebida, mas o servidor respondeu com um status de erro
-            console.error(`Erro ao buscar usos dos componentes para o arquivo ${libraryFileKey}: Status ${error.response.status}`);
-            console.error('Dados da resposta de erro:', JSON.stringify(error.response.data, null, 2));
-        } else if (error.request) {
-            // A solicitação foi feita, mas não houve resposta
-            console.error('Nenhuma resposta recebida da API:', error.request);
-        } else {
-            // Algo deu errado na configuração da solicitação
-            console.error('Erro ao configurar a solicitação:', error.message);
-        }
-        return [];
     }
+
+    return usages;
 }
 
 // Função para salvar os nomes dos componentes em um CSV
@@ -368,4 +384,3 @@ async function generateComponentReport(fileIds) {
     }
     await generateComponentReport(fileIds);
 })();
-

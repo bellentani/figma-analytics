@@ -27,7 +27,7 @@ This script generates a report of components from a Figma library. It uses the F
 
 Run the script using Node.js, passing in the necessary options and file keys:
 ```bash
-node figma_library_report.js [options] [file_key...]
+node generateReport.js [options] [file_key...]
 ```
 
 ### Options

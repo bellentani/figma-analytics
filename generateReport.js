@@ -35,7 +35,7 @@ const INCLUDE_VARIANTS = args.includes('--include-variants');
 
 // Period parameter
 let period = '30days';
-const periodOptions = ['30days', '60days', '90days', '1year'];
+const periodOptions = ['30days', '60days', '90days', '1year', 'custom'];
 args.forEach(arg => {
     if (periodOptions.includes(arg)) {
         period = arg;
@@ -43,11 +43,23 @@ args.forEach(arg => {
 });
 
 // Remove '--debug', '--include-variants' and period from arguments if present
-const fileIds = args.filter(arg => arg !== '--debug' && arg !== '--include-variants' && !periodOptions.includes(arg));
+const fileIds = args.filter(arg => arg !== '--debug' && arg !== '--include-variants' && !periodOptions.includes(arg) && !arg.startsWith('custom'));
 
 // Function to calculate start dates based on the period
 function calculateStartDate(period) {
     let startDate;
+    if (period.startsWith('custom')) {
+        const dates = period.match(/custom\[(\d{4}-\d{2}-\d{2})\s(\d{4}-\d{2}-\d{2})\]/);
+        if (dates && dates.length === 3) {
+            return {
+                startDate: dates[1],
+                endDate: dates[2]
+            };
+        } else {
+            console.error('Error: Invalid custom date format. Use custom[YYYY-MM-DD YYYY-MM-DD].');
+            process.exit(1);
+        }
+    }
     switch (period) {
         case '60days':
             startDate = moment().subtract(60, 'days').startOf('week').format('YYYY-MM-DD');
@@ -61,10 +73,10 @@ function calculateStartDate(period) {
         default:
             startDate = moment().subtract(30, 'days').startOf('week').format('YYYY-MM-DD');
     }
-    return startDate;
+    return { startDate };
 }
 
-const startDate = calculateStartDate(period);
+const { startDate, endDate } = calculateStartDate(period);
 
 // Function to make API call to get file metadata (including the file name)
 async function fetchFileMetadata(libraryFileKey) {
@@ -138,6 +150,7 @@ async function fetchComponentActions(libraryFileKey) {
                 params: {
                     group_by: 'component',
                     start_date: startDate,
+                    end_date: endDate,
                     cursor: cursor,
                 },
             });
@@ -224,14 +237,14 @@ async function fetchComponentUsages(libraryFileKey) {
     return usages;
 }
 
-// Function to save component names to a CSV
+// Function to save component names in a CSV
 async function extractDataToCSV(components, fileName) {
     if (components.length === 0) {
-        console.warn('No components found to generate the CSV.');
+        console.warn('No components found to generate CSV.');
         return;
     }
 
-    // Sort components
+    // Sorting components
     components.sort((a, b) => {
         const nameA = a.component_name.toLowerCase();
         const nameB = b.component_name.toLowerCase();
@@ -281,7 +294,7 @@ async function extractDataToCSV(components, fileName) {
     }
 }
 
-// Function to save a log in Markdown
+// Function to save log in Markdown
 async function saveLogMarkdown(fileName, libraryName, totalComponents, totalVariants, executionTime, period, lastValidWeek) {
     const logFilePath = `${REPORTS_DIR}/${fileName}.md`;
     const logContent = `# CSV Generation Report
@@ -291,7 +304,7 @@ async function saveLogMarkdown(fileName, libraryName, totalComponents, totalVari
 - **Total Variants**: ${totalVariants}
 - **Generation Date**: ${moment().format('YYYY-MM-DD HH:mm:ss')}
 - **Selected Period**: ${period}
-- **Last Valid Closed Week**: ${lastValidWeek}
+- **Last Closed Valid Week**: ${lastValidWeek}
 - **Total Execution Time**: ${executionTime} seconds
 `;
 
@@ -303,7 +316,35 @@ async function saveLogMarkdown(fileName, libraryName, totalComponents, totalVari
     }
 }
 
-// Main function to generate the component report
+// Function to fetch file metadata
+async function fetchFileMetadata(fileId) {
+    try {
+        const response = await axios.get(`${FIGMA_API_URL}${fileId}`, {
+            headers: {
+                'X-Figma-Token': FIGMA_TOKEN,
+            },
+        });
+
+        if (response.data && response.data.name) {
+            return response.data.name;
+        } else {
+            console.warn(`Unexpected response when fetching metadata for file ${fileId}`);
+            return 'Unknown Library';
+        }
+    } catch (error) {
+        if (error.response) {
+            console.error(`Error fetching file metadata for ${fileId}: Status ${error.response.status}`);
+            console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
+        } else if (error.request) {
+            console.error('No response received from API:', error.request);
+        } else {
+            console.error('Error setting up request:', error.message);
+        }
+        return 'Unknown Library';
+    }
+}
+
+// Main function to generate component report
 async function generateComponentReport(fileIds) {
     const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
     progressBar.start(fileIds.length, 0);
@@ -318,7 +359,7 @@ async function generateComponentReport(fileIds) {
         const componentUsages = await fetchComponentUsages(fileId);
 
         if (!components || components.length === 0) {
-            console.warn(`No components found for file ${fileId}.`);
+            console.warn(`No components found in file ${fileId}.`);
             progressBar.increment();
             continue;
         }
@@ -326,7 +367,7 @@ async function generateComponentReport(fileIds) {
         const timestamp = moment().format('YYYY-MM-DD_HH_mm_ss');
         const fileName = `figma_lib_report_${libraryName}_${timestamp}`;
 
-        // Create the structure for CSV
+        // Create the structure for the CSV
         let componentsData;
         if (INCLUDE_VARIANTS) {
             componentsData = components.map(component => {
@@ -373,7 +414,7 @@ async function generateComponentReport(fileIds) {
         const endTime = performance.now();
         const executionTime = ((endTime - startTime) / 1000).toFixed(2);
 
-        // Last valid closed week
+        // Last closed valid week
         const lastValidWeek = moment().subtract(1, 'week').endOf('week').format('YYYY-MM-DD');
 
         // Save log in Markdown
@@ -388,7 +429,7 @@ async function generateComponentReport(fileIds) {
         console.log(`Total Variants: ${componentsData.length}`);
         console.log(`Generation Date: ${moment().format('YYYY-MM-DD HH:mm:ss')}`);
         console.log(`Selected Period: ${period}`);
-        console.log(`Last Valid Closed Week: ${lastValidWeek}`);
+        console.log(`Last Closed Valid Week: ${lastValidWeek}`);
         console.log(`Total Execution Time: ${executionTime} seconds`);
 
         progressBar.increment();
@@ -397,10 +438,10 @@ async function generateComponentReport(fileIds) {
     progressBar.stop();
 }
 
-// Start report generation process
+// Start the report generation process
 (async () => {
     if (fileIds.length === 0) {
-        console.error('Error: No file ID provided. Provide at least one file ID to generate the report.');
+        console.error('Error: No file ID provided. Please provide at least one file ID to generate the report.');
         process.exit(1);
     }
     await generateComponentReport(fileIds);

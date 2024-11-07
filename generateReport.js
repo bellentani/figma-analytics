@@ -33,7 +33,7 @@ const INCLUDE_VARIANTS = args.includes('--include-variants');
 
 // Parâmetro de período
 let period = '30days';
-const periodOptions = ['30days', '60days', '90days', '1year', 'custom'];
+const periodOptions = ['30days', '60days', '90days', '1year'];
 args.forEach(arg => {
     if (periodOptions.includes(arg)) {
         period = arg;

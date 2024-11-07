@@ -29,8 +29,43 @@ const args = process.argv.slice(2);
 const DEBUG = args.includes('--debug');
 const INCLUDE_VARIANTS = args.includes('--include-variants');
 
-// Remove '--debug' e '--include-variants' dos argumentos se estiverem presentes
-const fileIds = args.filter(arg => arg !== '--debug' && arg !== '--include-variants');
+// Parâmetro de período
+let period = '30days';
+const periodOptions = ['30days', '60days', '90days', '1year', 'custom'];
+args.forEach(arg => {
+    if (periodOptions.includes(arg)) {
+        period = arg;
+    }
+});
+
+// Remove '--debug', '--include-variants' e período dos argumentos se estiverem presentes
+const fileIds = args.filter(arg => arg !== '--debug' && arg !== '--include-variants' && !periodOptions.includes(arg));
+
+// Função para calcular datas de início e fim com base no período
+function calculateDateRange(period) {
+    let startDate, endDate;
+    switch (period) {
+        case '60days':
+            startDate = moment().subtract(60, 'days').format('YYYY-MM-DD');
+            break;
+        case '90days':
+            startDate = moment().subtract(90, 'days').format('YYYY-MM-DD');
+            break;
+        case '1year':
+            startDate = moment().subtract(1, 'year').format('YYYY-MM-DD');
+            break;
+        case 'custom':
+            // Custom logic can be implemented here if needed
+            startDate = moment().subtract(30, 'days').format('YYYY-MM-DD'); // Placeholder for custom logic
+            break;
+        default:
+            startDate = moment().subtract(30, 'days').format('YYYY-MM-DD');
+    }
+    endDate = moment().format('YYYY-MM-DD');
+    return { startDate, endDate };
+}
+
+const { startDate, endDate } = calculateDateRange(period);
 
 // Função para fazer a chamada de API ao endpoint Components
 async function fetchComponents(libraryFileKey) {
@@ -70,9 +105,6 @@ async function fetchComponents(libraryFileKey) {
 
 // Função para fazer a chamada de API ao endpoint Component Actions
 async function fetchComponentActions(libraryFileKey) {
-    const startDate = moment().subtract(30, 'days').format('YYYY-MM-DD');
-    const endDate = moment().format('YYYY-MM-DD');
-
     try {
         const response = await axios.get(`${FIGMA_ANALYTICS_URL}${libraryFileKey}/component/actions`, {
             headers: {

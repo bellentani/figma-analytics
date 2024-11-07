@@ -64,7 +64,7 @@ node generateReport.js "custom[2024-08-01 2024-09-01]" your_file_key_here
 - **Data Sorting**: Components are sorted alphabetically, with those starting with the "🚫" emoji listed at the end.
 - **Detailed Debugging**: The `--debug` option allows you to see the full API responses for troubleshooting purposes.
 
-## Project Structure
+## [FUTURE] Project Structure
 
 To improve maintainability and scalability, the project is organized into several modules, each handling a specific responsibility.
 

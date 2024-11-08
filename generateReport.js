@@ -6,6 +6,7 @@ const fs = require('fs');
 const { performance } = require('perf_hooks'); // For measuring execution time
 const cliProgress = require('cli-progress'); // For progress bar
 const yargs = require('yargs');
+const https = require('https');
 
 // Figma API settings
 const FIGMA_API_URL = 'https://api.figma.com/v1/files/';
@@ -240,58 +241,65 @@ async function fetchComponentUsages(libraryFileKey) {
 
 // Function to save component names in a CSV
 async function extractDataToCSV(components, fileName) {
+    console.log('Iniciando geração do CSV...');
+    console.log('Componentes recebidos:', components.length);
+
     if (components.length === 0) {
-        console.warn('No components found to generate CSV.');
+        console.warn('Nenhum componente encontrado para gerar CSV.');
         return;
     }
 
-    // Sorting components
-    components.sort((a, b) => {
-        const nameA = a.component_name.toLowerCase();
-        const nameB = b.component_name.toLowerCase();
-        if (nameA.startsWith('🚫') && !nameB.startsWith('🚫')) return 1;
-        if (!nameA.startsWith('🚫') && nameB.startsWith('🚫')) return -1;
-        if (nameA < nameB) return -1;
-        if (nameA > nameB) return 1;
-        return 0;
-    });
+    try {
+        // Verifique se o diretório reports existe
+        if (!fs.existsSync(REPORTS_DIR)) {
+            console.log('Criando diretório reports...');
+            fs.mkdirSync(REPORTS_DIR);
+        }
 
-    if (INCLUDE_VARIANTS) {
+        console.log('Preparando dados para CSV...');
+        
+        // Adicione log dos dados antes de ordenar
+        console.log('Primeiros 3 componentes:', components.slice(0, 3));
+
+        // Sorting components
         components.sort((a, b) => {
-            if (a.component_name === b.component_name) {
-                return a.component_variant.toLowerCase().localeCompare(b.component_variant.toLowerCase());
-            }
+            const nameA = (a.component_name || '').toLowerCase();
+            const nameB = (b.component_name || '').toLowerCase();
+            if (nameA.startsWith('🚫') && !nameB.startsWith('🚫')) return 1;
+            if (!nameA.startsWith('🚫') && nameB.startsWith('🚫')) return -1;
+            if (nameA < nameB) return -1;
+            if (nameA > nameB) return 1;
             return 0;
         });
-    }
 
-    const csvWriter = createCsvWriter({
-        path: `${REPORTS_DIR}/${fileName}.csv`,
-        header: INCLUDE_VARIANTS ? [
-            { id: 'component_name', title: 'Component Name' },
-            { id: 'component_variant', title: 'Component Variant' },
-            { id: 'component_key', title: 'Component Key' },
-            { id: 'usages', title: 'Usages' },
-            { id: 'insertions', title: 'Insertions' },
-            { id: 'detachments', title: 'Detachments' },
-            { id: 'updated_at', title: 'Updated At' },
-            { id: 'created_at', title: 'Created At' },
-        ] : [
-            { id: 'component_name', title: 'Component Name' },
-            { id: 'total_variants', title: 'Total Variants' },
-            { id: 'usages', title: 'Usages' },
-            { id: 'insertions', title: 'Insertions' },
-            { id: 'detachments', title: 'Detachments' },
-            { id: 'updated_at', title: 'Updated At' },
-            { id: 'created_at', title: 'Created At' },
-        ],
-    });
+        const csvWriter = createCsvWriter({
+            path: `${REPORTS_DIR}/${fileName}.csv`,
+            header: INCLUDE_VARIANTS ? [
+                { id: 'component_name', title: 'Component Name' },
+                { id: 'component_variant', title: 'Component Variant' },
+                { id: 'component_key', title: 'Component Key' },
+                { id: 'usages', title: 'Usages' },
+                { id: 'insertions', title: 'Insertions' },
+                { id: 'detachments', title: 'Detachments' },
+                { id: 'updated_at', title: 'Updated At' },
+                { id: 'created_at', title: 'Created At' },
+            ] : [
+                { id: 'component_name', title: 'Component Name' },
+                { id: 'total_variants', title: 'Total Variants' },
+                { id: 'usages', title: 'Usages' },
+                { id: 'insertions', title: 'Insertions' },
+                { id: 'detachments', title: 'Detachments' },
+                { id: 'updated_at', title: 'Updated At' },
+                { id: 'created_at', title: 'Created At' },
+            ],
+        });
 
-    try {
+        console.log('Escrevendo arquivo CSV...');
         await csvWriter.writeRecords(components);
-        console.log(`CSV report successfully generated: ${REPORTS_DIR}/${fileName}.csv`);
+        console.log(`CSV gerado com sucesso: ${REPORTS_DIR}/${fileName}.csv`);
     } catch (error) {
-        console.error(`Error writing CSV file ${fileName}:`, error.message);
+        console.error('Erro ao gerar CSV:', error);
+        throw error; // Re-throw para capturar no processo principal
     }
 }
 
@@ -364,28 +372,6 @@ function isValidDate(dateStr) {
 
 // Função para processar o período
 function parsePeriod(periodStr) {
-    periodStr = periodStr.replace(/['"]/g, '');
-    
-    // Verifica se é um período customizado
-    if (periodStr.includes(',')) {
-        const dates = periodStr.split(',').map(d => d.trim());
-        
-        if (dates.length !== 2) {
-            throw new Error('Custom period must include start and end dates');
-        }
-
-        const [startDate, endDate] = dates;
-        if (!isValidDate(startDate) || !isValidDate(endDate)) {
-            throw new Error('Invalid date format. Use YYYY-MM-DD');
-        }
-
-        return {
-            startDate: new Date(startDate),
-            endDate: new Date(endDate)
-        };
-    }
-    
-    // Períodos fixos
     const validPeriods = {
         '30d': 30,
         '60d': 60,
@@ -393,116 +379,149 @@ function parsePeriod(periodStr) {
         '1y': 365
     };
 
-    if (!validPeriods.hasOwnProperty(periodStr)) {
+    // Remove aspas se houver
+    periodStr = (periodStr || '30d').replace(/['"]/g, '');
+
+    // Verifica se é um período customizado
+    if (periodStr.includes(',')) {
+        const [startStr, endStr] = periodStr.split(',').map(d => d.trim());
+        return {
+            startDate: startStr,
+            endDate: endStr
+        };
+    }
+
+    // Verifica se é um período válido
+    if (!validPeriods[periodStr]) {
         throw new Error('Invalid period. Use 30d, 60d, 90d, 1y or custom format (YYYY-MM-DD, YYYY-MM-DD)');
     }
 
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - validPeriods[periodStr]);
-    
-    return { startDate, endDate };
+
+    return {
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0]
+    };
 }
 
-// Main function to generate component report
-async function generateComponentReport(fileIds) {
-    const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
-    progressBar.start(fileIds.length, 0);
+// Função para buscar todas as páginas de ações dos componentes
+async function fetchAllComponentActions(fileId, startDate, endDate) {
+    let allRows = [];
+    let hasNextPage = true;
+    let cursor = null;
 
-    // Processa cada arquivo sequencialmente
-    for (let i = 0; i < fileIds.length; i++) {
-        const fileId = fileIds[i];
-        const startTime = performance.now();
-        console.log(`\nProcessing file ${i + 1} of ${fileIds.length} with ID: ${fileId}`);
-
+    while (hasNextPage) {
         try {
-            const libraryName = await fetchFileMetadata(fileId);
-            const components = await fetchComponents(fileId);
-            const componentActions = await fetchComponentActions(fileId);
-            const componentUsages = await fetchComponentUsages(fileId);
-
-            if (!components || components.length === 0) {
-                console.warn(`No components found in file ${fileId}.`);
-                progressBar.increment();
-                continue;
-            }
-
-            // Gera um nome único para cada arquivo baseado no nome da biblioteca
-            const timestamp = moment().format('YYYY-MM-DD_HH_mm_ss');
-            const sanitizedLibraryName = normalizeString(libraryName);
-            const fileName = `figma_lib_report_${sanitizedLibraryName}_${timestamp}`;
-
-            // Create the structure for the CSV
-            let componentsData;
-            if (INCLUDE_VARIANTS) {
-                componentsData = components.map(component => {
-                    const action = componentActions.find(a => a.component_key === component.key);
-                    const usage = componentUsages.find(u => u.component_key === component.key);
-                    return {
-                        component_name: component.containing_frame?.containingStateGroup?.name || component.name,
-                        component_variant: component.name,
-                        component_key: component.key,
-                        insertions: action ? action.insertions : 0,
-                        detachments: action ? action.detachments : 0,
-                        usages: usage ? usage.usages : 0,
-                        updated_at: moment(component.updated_at).format('YYYY-MM-DD'),
-                        created_at: moment(component.created_at).format('YYYY-MM-DD'),
-                    };
-                });
-            } else {
-                const componentGroups = components.reduce((acc, component) => {
-                    const componentName = component.containing_frame?.containingStateGroup?.name || component.name;
-                    if (!acc[componentName]) {
-                        const relatedActions = componentActions.filter(a => a.component_set_name === componentName);
-                        const relatedUsages = componentUsages.filter(u => u.component_set_name === componentName);
-                        acc[componentName] = {
-                            component_name: componentName,
-                            total_variants: 0,
-                            usages: relatedUsages.reduce((sum, u) => sum + (u.usages || 0), 0),
-                            insertions: relatedActions.reduce((sum, a) => sum + (a.insertions || 0), 0),
-                            detachments: relatedActions.reduce((sum, a) => sum + (a.detachments || 0), 0),
-                            updated_at: moment(component.updated_at).format('YYYY-MM-DD'),
-                            created_at: moment(component.created_at).format('YYYY-MM-DD'),
-                        };
+            const response = await axios.get(
+                `${FIGMA_ANALYTICS_URL}${fileId}/component/actions`,
+                {
+                    headers: {
+                        'X-Figma-Token': FIGMA_TOKEN
+                    },
+                    params: {
+                        group_by: 'component',
+                        start_date: startDate,
+                        end_date: endDate,
+                        ...(cursor && { cursor })
                     }
-                    acc[componentName].total_variants++;
-                    return acc;
-                }, {});
+                }
+            );
 
-                componentsData = Object.values(componentGroups);
+            const { rows, next_page, cursor: nextCursor } = response.data;
+            allRows = allRows.concat(rows || []);
+            
+            hasNextPage = next_page;
+            cursor = nextCursor;
+
+            if (DEBUG) {
+                console.log(`Fetched ${rows.length} actions. Has next page: ${hasNextPage}`);
             }
 
-            // Generate CSV
-            await extractDataToCSV(componentsData, fileName);
-
-            // Calculate execution time
-            const endTime = performance.now();
-            const executionTime = ((endTime - startTime) / 1000).toFixed(2);
-
-            // Last closed valid week
-            const lastValidWeek = moment().subtract(1, 'week').endOf('week').format('YYYY-MM-DD');
-
-            // Save log in Markdown
-            await saveLogMarkdown(fileName, libraryName, components.length, componentsData.length, executionTime, period, lastValidWeek);
-
-            // Display information in console
-            console.log(`\n--- Report Summary for ${libraryName} ---`);
-            console.log(`Library Name: ${libraryName}`);
-            console.log(`Total Components: ${components.length}`);
-            console.log(`Total Variants: ${componentsData.length}`);
-            console.log(`Files generated: ${fileName}.csv and ${fileName}.md`);
-            console.log(`Total Execution Time: ${executionTime} seconds\n`);
-
-            progressBar.increment();
         } catch (error) {
-            console.error(`Error processing file ${fileId}:`, error);
-            progressBar.increment();
-            continue;
+            console.error('Error fetching component actions:', error.message);
+            throw error;
         }
     }
 
-    progressBar.stop();
-    console.log('\nAll files have been processed.');
+    return allRows;
+}
+
+// Função para processar os dados das ações
+function processComponentActions(actions) {
+    // Agrupa as ações por componente
+    return actions.reduce((acc, row) => {
+        const key = row.component_key;
+        
+        if (!acc[key]) {
+            acc[key] = {
+                component_name: row.component_set_name || row.component_name,
+                component_key: key,
+                insertions: 0,
+                detachments: 0
+            };
+        }
+
+        acc[key].insertions += row.insertions || 0;
+        acc[key].detachments += row.detachments || 0;
+
+        return acc;
+    }, {});
+}
+
+// Main function to generate component report
+async function generateComponentReport(fileId, startDate, endDate, debug = false) {
+    try {
+        console.log('Iniciando geração do relatório...');
+        
+        // Busca o nome da biblioteca
+        const libraryName = await fetchFileMetadata(fileId);
+        console.log('Nome da biblioteca:', libraryName);
+
+        // Busca todas as ações (com paginação)
+        const actions = await fetchAllComponentActions(fileId, startDate, endDate);
+        console.log('Ações encontradas:', actions.length);
+        
+        // Busca os dados de uso
+        const usages = await fetchComponentUsages(fileId);
+        console.log('Dados de uso encontrados:', Object.keys(usages).length);
+
+        // Processa os dados
+        const processedActions = processComponentActions(actions);
+        console.log('Ações processadas:', Object.keys(processedActions).length);
+
+        // Prepara os dados para o relatório
+        const reportData = Object.values(processedActions).map(action => ({
+            ...action,
+            usages: usages[action.component_key]?.usages || 0
+        }));
+        console.log('Dados do relatório preparados:', reportData.length);
+
+        // Gera o nome do arquivo baseado na data e nome da biblioteca
+        const fileName = `${normalizeString(libraryName)}_${moment().format('YYYY-MM-DD')}`;
+        
+        // Gera o CSV
+        await extractDataToCSV(reportData, fileName);
+        
+        // Gera o MD
+        const executionTime = process.hrtime()[0];
+        await saveLogMarkdown(
+            fileName,
+            libraryName,
+            reportData.length,
+            reportData.reduce((acc, curr) => acc + (curr.total_variants || 1), 0),
+            executionTime,
+            `${startDate} to ${endDate}`,
+            moment().subtract(1, 'week').format('YYYY-MM-DD')
+        );
+
+        console.log('Relatório gerado com sucesso!');
+        return reportData;
+    } catch (error) {
+        console.error('Erro ao gerar relatório:', error);
+        throw error;
+    }
 }
 
 // Start the report generation process
@@ -516,12 +535,41 @@ async function generateComponentReport(fileIds) {
         })
         .option('period', {
             alias: 'p',
-            description: 'Analysis period (30d, 60d, 90d, 1y) or custom (YYYY-MM-DD, YYYY-MM-DD)',
+            description: 'Analysis period (30d, 60d, 90d, 1y)',
             type: 'string',
             default: '30d'
         })
         .help()
         .argv;
+
+    // Função para calcular o período
+    function calculatePeriod(periodStr) {
+        const validPeriods = {
+            '30d': 30,
+            '60d': 60,
+            '90d': 90,
+            '1y': 365
+        };
+
+        // Remove aspas se houver
+        const cleanPeriod = periodStr.replace(/['"]/g, '');
+
+        // Verifica se é um período válido
+        if (!validPeriods[cleanPeriod]) {
+            console.error('Invalid period. Using default (30d)');
+            return validPeriods['30d'];
+        }
+
+        return validPeriods[cleanPeriod];
+    }
+
+    // Função para formatar data como YYYY-MM-DD
+    function formatDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
 
     // Processa os IDs dos arquivos
     const fileIds = argv.files
@@ -530,17 +578,30 @@ async function generateComponentReport(fileIds) {
         .map(id => id.trim())
         .filter(id => id);
 
-    // Processa o período
-    const { startDate, endDate } = parsePeriod(argv.period);
+    // Calcula as datas do período
+    const days = calculatePeriod(argv.period);
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days);
 
-    // Ajusta as horas para pegar o dia completo
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
+    // Formata as datas para a API
+    const periodDates = {
+        startDate: formatDate(startDate),
+        endDate: formatDate(endDate)
+    };
+
+    if (argv.debug) {
+        console.log('Period:', {
+            days,
+            startDate: periodDates.startDate,
+            endDate: periodDates.endDate
+        });
+    }
 
     if (fileIds.length === 0) {
         console.error('Error: No file ID provided. Please provide at least one file ID to generate the report.');
         process.exit(1);
     }
-    await generateComponentReport(fileIds);
+    await generateComponentReport(fileIds, periodDates.startDate, periodDates.endDate, argv.debug);
 })();
 

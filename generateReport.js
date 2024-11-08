@@ -354,6 +354,56 @@ function normalizeString(string) {
         .toLowerCase();
 }
 
+// Função para validar formato de data
+function isValidDate(dateStr) {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(dateStr)) return false;
+    const date = new Date(dateStr);
+    return date instanceof Date && !isNaN(date);
+}
+
+// Função para processar o período
+function parsePeriod(periodStr) {
+    periodStr = periodStr.replace(/['"]/g, '');
+    
+    // Verifica se é um período customizado
+    if (periodStr.includes(',')) {
+        const dates = periodStr.split(',').map(d => d.trim());
+        
+        if (dates.length !== 2) {
+            throw new Error('Custom period must include start and end dates');
+        }
+
+        const [startDate, endDate] = dates;
+        if (!isValidDate(startDate) || !isValidDate(endDate)) {
+            throw new Error('Invalid date format. Use YYYY-MM-DD');
+        }
+
+        return {
+            startDate: new Date(startDate),
+            endDate: new Date(endDate)
+        };
+    }
+    
+    // Períodos fixos
+    const validPeriods = {
+        '30d': 30,
+        '60d': 60,
+        '90d': 90,
+        '1y': 365
+    };
+
+    if (!validPeriods.hasOwnProperty(periodStr)) {
+        throw new Error('Invalid period. Use 30d, 60d, 90d, 1y or custom format (YYYY-MM-DD, YYYY-MM-DD)');
+    }
+
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - validPeriods[periodStr]);
+    
+    return { startDate, endDate };
+}
+
 // Main function to generate component report
 async function generateComponentReport(fileIds) {
     const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
@@ -466,7 +516,7 @@ async function generateComponentReport(fileIds) {
         })
         .option('period', {
             alias: 'p',
-            description: 'Analysis period',
+            description: 'Analysis period (30d, 60d, 90d, 1y) or custom (YYYY-MM-DD, YYYY-MM-DD)',
             type: 'string',
             default: '30d'
         })
@@ -479,6 +529,13 @@ async function generateComponentReport(fileIds) {
         .split(',')
         .map(id => id.trim())
         .filter(id => id);
+
+    // Processa o período
+    const { startDate, endDate } = parsePeriod(argv.period);
+
+    // Ajusta as horas para pegar o dia completo
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
 
     if (fileIds.length === 0) {
         console.error('Error: No file ID provided. Please provide at least one file ID to generate the report.');

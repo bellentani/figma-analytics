@@ -344,6 +344,15 @@ async function fetchFileMetadata(fileId) {
     }
 }
 
+// Nova função para normalizar caracteres especiais
+function normalizeString(string) {
+    return string
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/[^a-z0-9]/gi, '_') // Substitui caracteres não alfanuméricos por _
+        .toLowerCase();
+}
+
 // Main function to generate component report
 async function generateComponentReport(fileIds) {
     const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
@@ -369,7 +378,7 @@ async function generateComponentReport(fileIds) {
 
             // Gera um nome único para cada arquivo baseado no nome da biblioteca
             const timestamp = moment().format('YYYY-MM-DD_HH_mm_ss');
-            const sanitizedLibraryName = libraryName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const sanitizedLibraryName = normalizeString(libraryName);
             const fileName = `figma_lib_report_${sanitizedLibraryName}_${timestamp}`;
 
             // Create the structure for the CSV

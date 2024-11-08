@@ -8,13 +8,13 @@
   },
   "dependencies": {
     "axios": "^0.24.0",
+    "cli-progress": "^3.9.1",
     "csv-writer": "^1.6.0",
     "dotenv": "^10.0.0",
     "fs": "0.0.1-security",
     "moment": "^2.29.1",
-    "cli-progress": "^3.9.1"
+    "yargs": "^17.7.2"
   },
-  "devDependencies": {},
   "author": "Poe Bellentani",
   "license": "ISC"
 }

@@ -5,6 +5,7 @@ const moment = require('moment'); // For date manipulation
 const fs = require('fs');
 const { performance } = require('perf_hooks'); // For measuring execution time
 const cliProgress = require('cli-progress'); // For progress bar
+const yargs = require('yargs');
 
 // Figma API settings
 const FIGMA_API_URL = 'https://api.figma.com/v1/files/';
@@ -456,6 +457,29 @@ async function generateComponentReport(fileIds) {
 
 // Start the report generation process
 (async () => {
+    const argv = yargs
+        .option('files', {
+            alias: 'f',
+            description: 'Figma file key(s)',
+            type: 'string',
+            demandOption: true
+        })
+        .option('period', {
+            alias: 'p',
+            description: 'Analysis period',
+            type: 'string',
+            default: '30d'
+        })
+        .help()
+        .argv;
+
+    // Processa os IDs dos arquivos
+    const fileIds = argv.files
+        .replace(/['"]/g, '')
+        .split(',')
+        .map(id => id.trim())
+        .filter(id => id);
+
     if (fileIds.length === 0) {
         console.error('Error: No file ID provided. Please provide at least one file ID to generate the report.');
         process.exit(1);

@@ -61,10 +61,10 @@ function calculateStartDate(period) {
         }
     }
     switch (period) {
-        case '60days':
+        case '60d':
             startDate = moment().subtract(60, 'days').startOf('week').format('YYYY-MM-DD');
             break;
-        case '90days':
+        case '90d':
             startDate = moment().subtract(90, 'days').startOf('week').format('YYYY-MM-DD');
             break;
         case '1year':
@@ -349,93 +349,100 @@ async function generateComponentReport(fileIds) {
     const progressBar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
     progressBar.start(fileIds.length, 0);
 
-    for (const fileId of fileIds) {
+    // Processa cada arquivo sequencialmente
+    for (let i = 0; i < fileIds.length; i++) {
+        const fileId = fileIds[i];
         const startTime = performance.now();
-        console.log(`Processing file with ID: ${fileId}`);
+        console.log(`\nProcessing file ${i + 1} of ${fileIds.length} with ID: ${fileId}`);
 
-        const libraryName = await fetchFileMetadata(fileId);
-        const components = await fetchComponents(fileId);
-        const componentActions = await fetchComponentActions(fileId);
-        const componentUsages = await fetchComponentUsages(fileId);
+        try {
+            const libraryName = await fetchFileMetadata(fileId);
+            const components = await fetchComponents(fileId);
+            const componentActions = await fetchComponentActions(fileId);
+            const componentUsages = await fetchComponentUsages(fileId);
 
-        if (!components || components.length === 0) {
-            console.warn(`No components found in file ${fileId}.`);
-            progressBar.increment();
-            continue;
-        }
+            if (!components || components.length === 0) {
+                console.warn(`No components found in file ${fileId}.`);
+                progressBar.increment();
+                continue;
+            }
 
-        const timestamp = moment().format('YYYY-MM-DD_HH_mm_ss');
-        const fileName = `figma_lib_report_${libraryName}_${timestamp}`;
+            // Gera um nome único para cada arquivo baseado no nome da biblioteca
+            const timestamp = moment().format('YYYY-MM-DD_HH_mm_ss');
+            const sanitizedLibraryName = libraryName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const fileName = `figma_lib_report_${sanitizedLibraryName}_${timestamp}`;
 
-        // Create the structure for the CSV
-        let componentsData;
-        if (INCLUDE_VARIANTS) {
-            componentsData = components.map(component => {
-                const action = componentActions.find(a => a.component_key === component.key);
-                const usage = componentUsages.find(u => u.component_key === component.key);
-                return {
-                    component_name: component.containing_frame?.containingStateGroup?.name || component.name,
-                    component_variant: component.name,
-                    component_key: component.key,
-                    insertions: action ? action.insertions : 0,
-                    detachments: action ? action.detachments : 0,
-                    usages: usage ? usage.usages : 0,
-                    updated_at: moment(component.updated_at).format('YYYY-MM-DD'),
-                    created_at: moment(component.created_at).format('YYYY-MM-DD'),
-                };
-            });
-        } else {
-            const componentGroups = components.reduce((acc, component) => {
-                const componentName = component.containing_frame?.containingStateGroup?.name || component.name;
-                if (!acc[componentName]) {
-                    const relatedActions = componentActions.filter(a => a.component_set_name === componentName);
-                    const relatedUsages = componentUsages.filter(u => u.component_set_name === componentName);
-                    acc[componentName] = {
-                        component_name: componentName,
-                        total_variants: 0,
-                        usages: relatedUsages.reduce((sum, u) => sum + (u.usages || 0), 0),
-                        insertions: relatedActions.reduce((sum, a) => sum + (a.insertions || 0), 0),
-                        detachments: relatedActions.reduce((sum, a) => sum + (a.detachments || 0), 0),
+            // Create the structure for the CSV
+            let componentsData;
+            if (INCLUDE_VARIANTS) {
+                componentsData = components.map(component => {
+                    const action = componentActions.find(a => a.component_key === component.key);
+                    const usage = componentUsages.find(u => u.component_key === component.key);
+                    return {
+                        component_name: component.containing_frame?.containingStateGroup?.name || component.name,
+                        component_variant: component.name,
+                        component_key: component.key,
+                        insertions: action ? action.insertions : 0,
+                        detachments: action ? action.detachments : 0,
+                        usages: usage ? usage.usages : 0,
                         updated_at: moment(component.updated_at).format('YYYY-MM-DD'),
                         created_at: moment(component.created_at).format('YYYY-MM-DD'),
                     };
-                }
-                acc[componentName].total_variants++;
-                return acc;
-            }, {});
+                });
+            } else {
+                const componentGroups = components.reduce((acc, component) => {
+                    const componentName = component.containing_frame?.containingStateGroup?.name || component.name;
+                    if (!acc[componentName]) {
+                        const relatedActions = componentActions.filter(a => a.component_set_name === componentName);
+                        const relatedUsages = componentUsages.filter(u => u.component_set_name === componentName);
+                        acc[componentName] = {
+                            component_name: componentName,
+                            total_variants: 0,
+                            usages: relatedUsages.reduce((sum, u) => sum + (u.usages || 0), 0),
+                            insertions: relatedActions.reduce((sum, a) => sum + (a.insertions || 0), 0),
+                            detachments: relatedActions.reduce((sum, a) => sum + (a.detachments || 0), 0),
+                            updated_at: moment(component.updated_at).format('YYYY-MM-DD'),
+                            created_at: moment(component.created_at).format('YYYY-MM-DD'),
+                        };
+                    }
+                    acc[componentName].total_variants++;
+                    return acc;
+                }, {});
 
-            componentsData = Object.values(componentGroups);
+                componentsData = Object.values(componentGroups);
+            }
+
+            // Generate CSV
+            await extractDataToCSV(componentsData, fileName);
+
+            // Calculate execution time
+            const endTime = performance.now();
+            const executionTime = ((endTime - startTime) / 1000).toFixed(2);
+
+            // Last closed valid week
+            const lastValidWeek = moment().subtract(1, 'week').endOf('week').format('YYYY-MM-DD');
+
+            // Save log in Markdown
+            await saveLogMarkdown(fileName, libraryName, components.length, componentsData.length, executionTime, period, lastValidWeek);
+
+            // Display information in console
+            console.log(`\n--- Report Summary for ${libraryName} ---`);
+            console.log(`Library Name: ${libraryName}`);
+            console.log(`Total Components: ${components.length}`);
+            console.log(`Total Variants: ${componentsData.length}`);
+            console.log(`Files generated: ${fileName}.csv and ${fileName}.md`);
+            console.log(`Total Execution Time: ${executionTime} seconds\n`);
+
+            progressBar.increment();
+        } catch (error) {
+            console.error(`Error processing file ${fileId}:`, error);
+            progressBar.increment();
+            continue;
         }
-
-        // Generate CSV
-        await extractDataToCSV(componentsData, fileName);
-
-        // Calculate execution time
-        const endTime = performance.now();
-        const executionTime = ((endTime - startTime) / 1000).toFixed(2);
-
-        // Last closed valid week
-        const lastValidWeek = moment().subtract(1, 'week').endOf('week').format('YYYY-MM-DD');
-
-        // Save log in Markdown
-        await saveLogMarkdown(fileName, libraryName, components.length, componentsData.length, executionTime, period, lastValidWeek);
-
-        // Display information in console
-        console.log(`
---- Report Summary ---
-`);
-        console.log(`Library Name: ${libraryName}`);
-        console.log(`Total Components: ${components.length}`);
-        console.log(`Total Variants: ${componentsData.length}`);
-        console.log(`Generation Date: ${moment().format('YYYY-MM-DD HH:mm:ss')}`);
-        console.log(`Selected Period: ${period}`);
-        console.log(`Last Closed Valid Week: ${lastValidWeek}`);
-        console.log(`Total Execution Time: ${executionTime} seconds`);
-
-        progressBar.increment();
     }
 
     progressBar.stop();
+    console.log('\nAll files have been processed.');
 }
 
 // Start the report generation process

@@ -110,7 +110,6 @@ async function fetchComponents(libraryFileKey) {
             },
         });
 
-        // Display the full API response for diagnosis
         if (DEBUG) {
             console.log('Full API response from Components:', JSON.stringify(response.data, null, 2));
         }
@@ -122,121 +121,59 @@ async function fetchComponents(libraryFileKey) {
             return [];
         }
     } catch (error) {
-        if (error.response) {
-            // Response received, but server responded with an error status
-            console.error(`Error fetching components for file ${libraryFileKey}: Status ${error.response.status}`);
-            console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
-        } else if (error.request) {
-            // Request was made, but no response received
-            console.error('No response received from API:', error.request);
-        } else {
-            // Something went wrong in setting up the request
-            console.error('Error setting up request:', error.message);
-        }
+        console.error(`Error fetching components for file ${libraryFileKey}:`, error);
         return [];
     }
 }
 
-// Function to make API call to Component Actions endpoint with pagination
-async function fetchComponentActions(libraryFileKey) {
-    let actions = [];
-    let nextPage = true;
-    let cursor = null;
-
-    while (nextPage) {
-        try {
-            const response = await axios.get(`${FIGMA_ANALYTICS_URL}${libraryFileKey}/component/actions`, {
-                headers: {
-                    'X-Figma-Token': FIGMA_TOKEN,
-                },
-                params: {
-                    group_by: 'component',
-                    start_date: startDate,
-                    end_date: endDate,
-                    cursor: cursor,
-                },
-            });
-
-            // Display the full API response for diagnosis
-            if (DEBUG) {
-                console.log('Full API response from Component Actions:', JSON.stringify(response.data, null, 2));
-            }
-
-            if (response.data && response.data.rows && Array.isArray(response.data.rows)) {
-                actions = actions.concat(response.data.rows);
-                nextPage = response.data.next_page;
-                cursor = response.data.cursor;
-            } else {
-                console.warn(`Unexpected response when fetching component actions for file ${libraryFileKey}`);
-                nextPage = false;
-            }
-        } catch (error) {
-            if (error.response) {
-                // Response received, but server responded with an error status
-                console.error(`Error fetching component actions for file ${libraryFileKey}: Status ${error.response.status}`);
-                console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
-            } else if (error.request) {
-                // Request was made, but no response received
-                console.error('No response received from API:', error.request);
-            } else {
-                // Something went wrong in setting up the request
-                console.error('Error setting up request:', error.message);
-            }
-            nextPage = false;
-        }
-    }
-
-    return actions;
+// Função para buscar e processar ações (insertions e detachments)
+async function fetchComponentActions(fileId, startDate, endDate) {
+    console.log('Component Actions WIP');
+    return {};
 }
 
-// Function to make API call to Component Usages endpoint with pagination
-async function fetchComponentUsages(libraryFileKey) {
-    let usages = [];
-    let nextPage = true;
-    let cursor = null;
-
-    while (nextPage) {
-        try {
-            const response = await axios.get(`${FIGMA_ANALYTICS_URL}${libraryFileKey}/component/usages`, {
+// Função para buscar e processar usages
+async function fetchComponentUsages(fileId) {
+    try {
+        console.log('\n=== DADOS DO ENDPOINT COMPONENT/USAGES ===');
+        
+        const response = await axios.get(
+            `${FIGMA_ANALYTICS_URL}${fileId}/component/usages`,
+            {
                 headers: {
-                    'X-Figma-Token': FIGMA_TOKEN,
+                    'X-Figma-Token': FIGMA_TOKEN
                 },
                 params: {
-                    group_by: 'component',
-                    cursor: cursor,
-                },
-            });
+                    group_by: 'component'
+                }
+            }
+        );
 
-            // Display the full API response for diagnosis
-            if (DEBUG) {
-                console.log('Full API response from Component Usages:', JSON.stringify(response.data, null, 2));
-            }
+        console.log('Primeiras 3 linhas da resposta:');
+        console.log(response.data?.rows?.slice(0, 3).map(row => ({
+            component_key: row.component_key,
+            component_name: row.component_name,
+            component_set_name: row.component_set_name,
+            usages: row.usages
+        })));
 
-            if (response.data && response.data.rows && Array.isArray(response.data.rows)) {
-                usages = usages.concat(response.data.rows);
-                nextPage = response.data.next_page;
-                cursor = response.data.cursor;
-            } else {
-                console.warn(`Unexpected response when fetching component usages for file ${libraryFileKey}`);
-                nextPage = false;
-            }
-        } catch (error) {
-            if (error.response) {
-                // Response received, but server responded with an error status
-                console.error(`Error fetching component usages for file ${libraryFileKey}: Status ${error.response.status}`);
-                console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
-            } else if (error.request) {
-                // Request was made, but no response received
-                console.error('No response received from API:', error.request);
-            } else {
-                // Something went wrong in setting up the request
-                console.error('Error setting up request:', error.message);
-            }
-            nextPage = false;
-        }
+        // Processa os usages por component_key
+        const usagesByKey = {};
+        (response.data?.rows || []).forEach(row => {
+            if (!row.component_key) return;
+            usagesByKey[row.component_key] = {
+                usages: parseInt(row.usages) || 0
+            };
+        });
+
+        console.log('\nPrimeiros 3 usages processados:');
+        console.log(Object.entries(usagesByKey).slice(0, 3));
+
+        return usagesByKey;
+    } catch (error) {
+        console.error('Erro ao buscar usages dos componentes:', error.message);
+        return {};
     }
-
-    return usages;
 }
 
 // Function to save component names in a CSV
@@ -258,8 +195,19 @@ async function extractDataToCSV(components, fileName) {
 
         console.log('Preparando dados para CSV...');
         
-        // Adicione log dos dados antes de ordenar
-        console.log('Primeiros 3 componentes:', components.slice(0, 3));
+        // Adicione log de todos os componentes
+        console.log('Lista completa de componentes:');
+        components.forEach(comp => {
+            console.log({
+                component_name: comp.component_name,
+                total_variants: comp.total_variants,
+                usages: comp.usages,
+                insertions: comp.insertions,
+                detachments: comp.detachments,
+                updated_at: comp.updated_at,
+                created_at: comp.created_at
+            });
+        });
 
         // Sorting components
         components.sort((a, b) => {
@@ -408,44 +356,42 @@ function parsePeriod(periodStr) {
 
 // Função para buscar todas as páginas de ações dos componentes
 async function fetchAllComponentActions(fileId, startDate, endDate) {
-    let allRows = [];
-    let hasNextPage = true;
-    let cursor = null;
-
-    while (hasNextPage) {
-        try {
-            const response = await axios.get(
-                `${FIGMA_ANALYTICS_URL}${fileId}/component/actions`,
-                {
-                    headers: {
-                        'X-Figma-Token': FIGMA_TOKEN
-                    },
-                    params: {
-                        group_by: 'component',
-                        start_date: startDate,
-                        end_date: endDate,
-                        ...(cursor && { cursor })
-                    }
+    try {
+        console.log('Buscando ações para o período:', { startDate, endDate });
+        
+        const response = await axios.get(
+            `${FIGMA_ANALYTICS_URL}${fileId}/component/actions`,
+            {
+                headers: {
+                    'X-Figma-Token': FIGMA_TOKEN
+                },
+                params: {
+                    group_by: 'component',
+                    start_date: startDate,
+                    end_date: endDate
                 }
-            );
-
-            const { rows, next_page, cursor: nextCursor } = response.data;
-            allRows = allRows.concat(rows || []);
-            
-            hasNextPage = next_page;
-            cursor = nextCursor;
-
-            if (DEBUG) {
-                console.log(`Fetched ${rows.length} actions. Has next page: ${hasNextPage}`);
             }
+        );
 
-        } catch (error) {
-            console.error('Error fetching component actions:', error.message);
-            throw error;
+        if (DEBUG) {
+            console.log('Resposta da API de ações:', {
+                status: response.status,
+                estrutura: response.data ? Object.keys(response.data) : 'sem dados',
+                temRows: !!response.data?.rows,
+                quantidadeRows: response.data?.rows?.length
+            });
         }
-    }
 
-    return allRows;
+        const actions = response.data?.rows || [];
+        return actions.map(action => ({
+            component_key: action.component_key,
+            insertions: parseInt(action.insertions) || 0,
+            detachments: parseInt(action.detachments) || 0
+        }));
+    } catch (error) {
+        console.error('Erro ao buscar aões dos componentes:', error.message);
+        return [];
+    }
 }
 
 // Função para processar os dados das ações
@@ -470,6 +416,87 @@ function processComponentActions(actions) {
     }, {});
 }
 
+// Função para processar e agregar componentes
+function processComponents(components, actions, usages) {
+    console.log('\n=== COMPONENT LIST ===');
+    console.log('Total de componentes recebidos:', components.length);
+
+    // Agrupar por containing_frame.containingStateGroup.name ou component_name
+    const groupedComponents = components.reduce((acc, component) => {
+        // Tenta pegar o nome do state group primeiro, depois o frame name
+        const stateGroupName = component.containing_frame?.containingStateGroup?.name;
+        const frameName = component.containing_frame?.name;
+        const componentName = component.name;
+        const componentKey = component.key;
+        
+        // Define qual nome usar (prioridade: stateGroup > frame > component)
+        const name = stateGroupName || frameName || componentName;
+        
+        if (!acc[name]) {
+            acc[name] = {
+                component_name: name,
+                total_variants: 0,
+                usages: 0,
+                insertions: 'N/A',
+                detachments: 'N/A',
+                updated_at: component.updated_at || 'N/A',
+                created_at: component.created_at || 'N/A',
+                component_keys: new Set(),
+                is_set: !!(stateGroupName || frameName)
+            };
+        }
+
+        acc[name].component_keys.add(componentKey);
+
+        // Adiciona os usos
+        const usageData = usages[componentKey];
+        if (usageData) {
+            acc[name].usages += usageData.usages || 0;
+        }
+
+        return acc;
+    }, {});
+
+    // Log dos tipos de componentes
+    const sets = Object.values(groupedComponents).filter(c => c.is_set);
+    const individuals = Object.values(groupedComponents).filter(c => !c.is_set);
+    
+    console.log('\nEstatísticas:');
+    console.log(`Total de component sets: ${sets.length}`);
+    console.log(`Total de componentes individuais: ${individuals.length}`);
+
+    // Calcula o total de variantes
+    Object.values(groupedComponents).forEach(group => {
+        group.total_variants = group.is_set ? group.component_keys.size : 1;
+        delete group.component_keys;
+        delete group.is_set;
+    });
+
+    // Converte para array e ordena
+    let result = Object.values(groupedComponents);
+    result.sort((a, b) => {
+        const nameA = a.component_name.toLowerCase();
+        const nameB = b.component_name.toLowerCase();
+        
+        // Coloca componentes deprecados no final
+        if (nameA.startsWith('🚫') && !nameB.startsWith('🚫')) return 1;
+        if (!nameA.startsWith('🚫') && nameB.startsWith('🚫')) return -1;
+        
+        return nameA.localeCompare(nameB);
+    });
+
+    // Log dos componentes processados
+    console.log('\nComponentes processados:');
+    console.log('Component Name | Total Variants | Usages | Type');
+    console.log('------------------------------------------------');
+    result.forEach(comp => {
+        const type = sets.includes(comp) ? 'SET' : 'INDIVIDUAL';
+        console.log(`${comp.component_name} | ${comp.total_variants} | ${comp.usages} | ${type}`);
+    });
+
+    return result;
+}
+
 // Main function to generate component report
 async function generateComponentReport(fileId, startDate, endDate, debug = false) {
     try {
@@ -479,7 +506,11 @@ async function generateComponentReport(fileId, startDate, endDate, debug = false
         const libraryName = await fetchFileMetadata(fileId);
         console.log('Nome da biblioteca:', libraryName);
 
-        // Busca todas as ações (com paginação)
+        // Busca os componentes
+        const components = await fetchComponents(fileId);
+        console.log('Componentes encontrados:', components.length);
+
+        // Busca todas as ações
         const actions = await fetchAllComponentActions(fileId, startDate, endDate);
         console.log('Ações encontradas:', actions.length);
         
@@ -487,18 +518,27 @@ async function generateComponentReport(fileId, startDate, endDate, debug = false
         const usages = await fetchComponentUsages(fileId);
         console.log('Dados de uso encontrados:', Object.keys(usages).length);
 
-        // Processa os dados
-        const processedActions = processComponentActions(actions);
-        console.log('Ações processadas:', Object.keys(processedActions).length);
+        if (DEBUG) {
+            console.log('Amostra de dados:');
+            console.log('- Primeiro componente:', components[0]);
+            console.log('- Primeira ação:', actions[0]);
+            console.log('- Primeiro uso:', Object.entries(usages)[0]);
+        }
 
-        // Prepara os dados para o relatório
-        const reportData = Object.values(processedActions).map(action => ({
-            ...action,
-            usages: usages[action.component_key]?.usages || 0
-        }));
+        // Processa os dados das ações em um formato mais fácil de usar
+        const processedActions = actions.reduce((acc, action) => {
+            acc[action.component_key] = {
+                insertions: action.insertions || 0,
+                detachments: action.detachments || 0
+            };
+            return acc;
+        }, {});
+
+        // Processa e agrega os componentes
+        const reportData = processComponents(components, processedActions, usages);
         console.log('Dados do relatório preparados:', reportData.length);
 
-        // Gera o nome do arquivo baseado na data e nome da biblioteca
+        // Gera o nome do arquivo
         const fileName = `${normalizeString(libraryName)}_${moment().format('YYYY-MM-DD')}`;
         
         // Gera o CSV
@@ -510,7 +550,7 @@ async function generateComponentReport(fileId, startDate, endDate, debug = false
             fileName,
             libraryName,
             reportData.length,
-            reportData.reduce((acc, curr) => acc + (curr.total_variants || 1), 0),
+            INCLUDE_VARIANTS ? reportData.length : reportData.reduce((acc, curr) => acc + curr.total_variants, 0),
             executionTime,
             `${startDate} to ${endDate}`,
             moment().subtract(1, 'week').format('YYYY-MM-DD')

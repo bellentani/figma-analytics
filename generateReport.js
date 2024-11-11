@@ -438,31 +438,14 @@ function processComponentActions(actions) {
 
 // Função para processar e agregar componentes
 function processComponents(components, actionsData, usages) {
-    // Initial debug log
-    console.log('\n=== KEY MAPPING DEBUG ===');
-    console.log('Component key samples:', components.slice(0, 2).map(c => ({
-        name: c.name,
-        key: c.key,
-        set_key: c.containing_frame?.nodeId
-    })));
-    console.log('Action key samples:', Object.keys(actionsData).slice(0, 2));
-
+    console.log('\n=== PROCESSING COMPONENTS ===');
+    console.log('Total actions received:', Object.keys(actionsData).length);
+    
     const processedComponents = components.reduce((acc, component) => {
         const setName = component.containing_frame?.name || component.name;
         const componentKey = component.key;
         const setKey = component.containing_frame?.nodeId;
 
-        // Debug log for key matching
-        if (actionsData[componentKey] || actionsData[setKey]) {
-            console.log('\nMatch found for:', {
-                name: setName,
-                componentKey,
-                setKey,
-                actions: actionsData[componentKey] || actionsData[setKey]
-            });
-        }
-
-        // Initialize component data
         if (!acc[setName]) {
             acc[setName] = {
                 component_name: setName,
@@ -472,39 +455,54 @@ function processComponents(components, actionsData, usages) {
                 detachments: 0,
                 updated_at: component.updated_at,
                 created_at: component.created_at,
-                type: component.containing_frame ? 'SET' : 'INDIVIDUAL'
+                type: 'Single' // Default as Single, will update to Set if total_variants > 1
             };
         }
 
         // Increment variants count
         acc[setName].total_variants++;
 
+        // Update type based on total variants
+        if (acc[setName].total_variants > 1) {
+            acc[setName].type = 'Set';
+        }
+
         // Add usage data
         acc[setName].usages += Number(usages[componentKey]?.usages || 0);
 
-        // Add actions data using both component and set keys
-        const actions = actionsData[componentKey] || actionsData[setKey] || {};
-        acc[setName].insertions += Number(actions.insertions || 0);
-        acc[setName].detachments += Number(actions.detachments || 0);
+        // Add actions data - try both component key and set key
+        const componentActions = actionsData[componentKey];
+        const setActions = actionsData[setKey];
+
+        if (componentActions) {
+            acc[setName].insertions += Number(componentActions.insertions || 0);
+            acc[setName].detachments += Number(componentActions.detachments || 0);
+        }
+
+        if (setActions) {
+            acc[setName].insertions += Number(setActions.insertions || 0);
+            acc[setName].detachments += Number(setActions.detachments || 0);
+        }
 
         return acc;
     }, {});
 
-    // Sort components alphabetically
+    // Sort and prepare final result
     const result = Object.values(processedComponents)
         .sort((a, b) => a.component_name.toLowerCase().localeCompare(b.component_name.toLowerCase()));
 
     // Detailed component listing
     console.log('\n=== COMPONENT LIST ===');
-    console.log('Component Name | Total Variants | Usages (total) | Inserts (period) | Detachs (period)');
-    console.log('--------------------------------------------------------------------------------');
+    console.log('Component Name | Total Variants | Usages (total) | Inserts (period) | Detachs (period) | Type');
+    console.log('-----------------------------------------------------------------------------------------');
     result.forEach(comp => {
         console.log(
             `${comp.component_name.padEnd(20)} | ` +
             `${String(comp.total_variants).padEnd(14)} | ` +
             `${String(comp.usages).padEnd(13)} | ` +
-            `${String(comp.insertions || 'N/A').padEnd(15)} | ` +
-            `${comp.detachments || 'N/A'}`
+            `${String(comp.insertions || 0).padEnd(15)} | ` +
+            `${String(comp.detachments || 0).padEnd(14)} | ` +
+            `${comp.type}`
         );
     });
 

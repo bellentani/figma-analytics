@@ -126,128 +126,133 @@ async function fetchComponents(libraryFileKey) {
     }
 }
 
-// Função para buscar e processar ações (insertions e detachments)
+// Função para buscar e processar ações
 async function fetchComponentActions(fileId, startDate, endDate) {
-    console.log('Component Actions WIP');
-    return {};
-}
-
-// Função para buscar e processar usages
-async function fetchComponentUsages(fileId) {
     try {
-        console.log('\n=== DADOS DO ENDPOINT COMPONENT/USAGES ===');
+        console.log('\n=== DADOS DO ENDPOINT COMPONENT/ACTIONS ===');
+        console.log('Buscando ações para o período:', { startDate, endDate });
         
         const response = await axios.get(
-            `${FIGMA_ANALYTICS_URL}${fileId}/component/usages`,
+            `${FIGMA_ANALYTICS_URL}${fileId}/component/actions`,
             {
                 headers: {
                     'X-Figma-Token': FIGMA_TOKEN
                 },
                 params: {
-                    group_by: 'component'
+                    group_by: 'component',
+                    start_date: startDate,
+                    end_date: endDate
                 }
             }
         );
 
-        console.log('Primeiras 3 linhas da resposta:');
+        console.log('Estrutura da resposta de actions:', {
+            cursor: response.data?.cursor,
+            next_page: response.data?.next_page,
+            total_rows: response.data?.rows?.length,
+            periodo: `${startDate} até ${endDate}`
+        });
+
+        // Log das primeiras 3 linhas para debug
+        console.log('Primeiras 3 linhas da resposta de actions:');
         console.log(response.data?.rows?.slice(0, 3).map(row => ({
             component_key: row.component_key,
             component_name: row.component_name,
             component_set_name: row.component_set_name,
-            usages: row.usages
+            week: row.week,
+            insertions: row.insertions,
+            detachments: row.detachments
         })));
 
-        // Processa os usages por component_key
-        const usagesByKey = {};
-        (response.data?.rows || []).forEach(row => {
-            if (!row.component_key) return;
-            usagesByKey[row.component_key] = {
-                usages: parseInt(row.usages) || 0
-            };
-        });
+        // Agrupa por component_set_key (para variantes) ou component_key (para componentes individuais)
+        const actionsByKey = (response.data?.rows || []).reduce((acc, row) => {
+            const key = row.component_set_key || row.component_key;
+            if (!key) return acc;
+            
+            if (!acc[key]) {
+                acc[key] = {
+                    insertions: 0,
+                    detachments: 0,
+                    weeks: new Set()
+                };
+            }
 
-        console.log('\nPrimeiros 3 usages processados:');
-        console.log(Object.entries(usagesByKey).slice(0, 3));
+            acc[key].insertions += parseInt(row.insertions) || 0;
+            acc[key].detachments += parseInt(row.detachments) || 0;
+            if (row.week) {
+                acc[key].weeks.add(row.week);
+            }
 
-        return usagesByKey;
+            return acc;
+        }, {});
+
+        // Log do processamento para debug
+        console.log('\nPrimeiras 3 ações processadas:');
+        console.log(Object.entries(actionsByKey).slice(0, 3).map(([key, data]) => ({
+            key,
+            insertions: data.insertions,
+            detachments: data.detachments,
+            total_weeks: data.weeks.size
+        })));
+
+        return actionsByKey;
     } catch (error) {
-        console.error('Erro ao buscar usages dos componentes:', error.message);
+        console.error('Erro ao buscar ações dos componentes:', error.message);
+        if (error.response) {
+            console.error('Status:', error.response.status);
+            console.error('Dados:', error.response.data);
+        }
         return {};
     }
 }
 
 // Function to save component names in a CSV
 async function extractDataToCSV(components, fileName) {
-    console.log('Iniciando geração do CSV...');
-    console.log('Componentes recebidos:', components.length);
+    console.log('Starting CSV generation...');
+    console.log('Components received:', components.length);
 
     if (components.length === 0) {
-        console.warn('Nenhum componente encontrado para gerar CSV.');
+        console.warn('No components found to generate CSV.');
         return;
     }
 
     try {
-        // Verifique se o diretório reports existe
+        // Check if reports directory exists
         if (!fs.existsSync(REPORTS_DIR)) {
-            console.log('Criando diretório reports...');
+            console.log('Creating reports directory...');
             fs.mkdirSync(REPORTS_DIR);
         }
 
-        console.log('Preparando dados para CSV...');
+        console.log('Preparing data for CSV...');
         
-        // Adicione log de todos os componentes
-        console.log('Lista completa de componentes:');
+        // Sort components alphabetically
+        components.sort((a, b) => {
+            const nameA = (a.component_name || '').toLowerCase();
+            const nameB = (b.component_name || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+
+        // Debug log
+        console.log('Complete component list:');
         components.forEach(comp => {
             console.log({
                 component_name: comp.component_name,
                 total_variants: comp.total_variants,
                 usages: comp.usages,
-                insertions: comp.insertions,
-                detachments: comp.detachments,
+                insertions: comp.insertions || 'N/A',
+                detachments: comp.detachments || 'N/A',
                 updated_at: comp.updated_at,
-                created_at: comp.created_at
+                created_at: comp.created_at,
+                type: comp.type
             });
         });
 
-        // Sorting components
-        components.sort((a, b) => {
-            const nameA = (a.component_name || '').toLowerCase();
-            const nameB = (b.component_name || '').toLowerCase();
-            if (nameA.startsWith('🚫') && !nameB.startsWith('🚫')) return 1;
-            if (!nameA.startsWith('🚫') && nameB.startsWith('🚫')) return -1;
-            if (nameA < nameB) return -1;
-            if (nameA > nameB) return 1;
-            return 0;
-        });
-
-        const csvWriter = createCsvWriter({
-            path: `${REPORTS_DIR}/${fileName}.csv`,
-            header: INCLUDE_VARIANTS ? [
-                { id: 'component_name', title: 'Component Name' },
-                { id: 'component_variant', title: 'Component Variant' },
-                { id: 'component_key', title: 'Component Key' },
-                { id: 'usages', title: 'Usages' },
-                { id: 'insertions', title: 'Insertions' },
-                { id: 'detachments', title: 'Detachments' },
-                { id: 'updated_at', title: 'Updated At' },
-                { id: 'created_at', title: 'Created At' },
-            ] : [
-                { id: 'component_name', title: 'Component Name' },
-                { id: 'total_variants', title: 'Total Variants' },
-                { id: 'usages', title: 'Usages' },
-                { id: 'insertions', title: 'Insertions' },
-                { id: 'detachments', title: 'Detachments' },
-                { id: 'updated_at', title: 'Updated At' },
-                { id: 'created_at', title: 'Created At' },
-            ],
-        });
-
-        console.log('Escrevendo arquivo CSV...');
+        console.log('Writing CSV file...');
         await csvWriter.writeRecords(components);
-        console.log(`CSV gerado com sucesso: ${REPORTS_DIR}/${fileName}.csv`);
+        console.log(`CSV generated successfully: ${REPORTS_DIR}/${fileName}.csv`);
     } catch (error) {
-        console.error('Erro ao gerar CSV:', error);
-        throw error; // Re-throw para capturar no processo principal
+        console.error('Error generating CSV:', error);
+        throw error;
     }
 }
 
@@ -417,81 +422,75 @@ function processComponentActions(actions) {
 }
 
 // Função para processar e agregar componentes
-function processComponents(components, actions, usages) {
-    console.log('\n=== COMPONENT LIST ===');
-    console.log('Total de componentes recebidos:', components.length);
+function processComponents(components, actionsData, usages) {
+    // Initial debug log
+    console.log('\n=== KEY MAPPING DEBUG ===');
+    console.log('Component key samples:', components.slice(0, 2).map(c => ({
+        name: c.name,
+        key: c.key,
+        set_key: c.containing_frame?.nodeId
+    })));
+    console.log('Action key samples:', Object.keys(actionsData).slice(0, 2));
 
-    // Agrupar por containing_frame.containingStateGroup.name ou component_name
-    const groupedComponents = components.reduce((acc, component) => {
-        // Tenta pegar o nome do state group primeiro, depois o frame name
-        const stateGroupName = component.containing_frame?.containingStateGroup?.name;
-        const frameName = component.containing_frame?.name;
-        const componentName = component.name;
+    const processedComponents = components.reduce((acc, component) => {
+        const setName = component.containing_frame?.name || component.name;
         const componentKey = component.key;
-        
-        // Define qual nome usar (prioridade: stateGroup > frame > component)
-        const name = stateGroupName || frameName || componentName;
-        
-        if (!acc[name]) {
-            acc[name] = {
-                component_name: name,
+        const setKey = component.containing_frame?.nodeId;
+
+        // Debug log for key matching
+        if (actionsData[componentKey] || actionsData[setKey]) {
+            console.log('\nMatch found for:', {
+                name: setName,
+                componentKey,
+                setKey,
+                actions: actionsData[componentKey] || actionsData[setKey]
+            });
+        }
+
+        // Initialize component data
+        if (!acc[setName]) {
+            acc[setName] = {
+                component_name: setName,
                 total_variants: 0,
                 usages: 0,
-                insertions: 'N/A',
-                detachments: 'N/A',
-                updated_at: component.updated_at || 'N/A',
-                created_at: component.created_at || 'N/A',
-                component_keys: new Set(),
-                is_set: !!(stateGroupName || frameName)
+                insertions: 0,
+                detachments: 0,
+                updated_at: component.updated_at,
+                created_at: component.created_at,
+                type: component.containing_frame ? 'SET' : 'INDIVIDUAL'
             };
         }
 
-        acc[name].component_keys.add(componentKey);
+        // Increment variants count
+        acc[setName].total_variants++;
 
-        // Adiciona os usos
-        const usageData = usages[componentKey];
-        if (usageData) {
-            acc[name].usages += usageData.usages || 0;
-        }
+        // Add usage data
+        acc[setName].usages += Number(usages[componentKey]?.usages || 0);
+
+        // Add actions data using both component and set keys
+        const actions = actionsData[componentKey] || actionsData[setKey] || {};
+        acc[setName].insertions += Number(actions.insertions || 0);
+        acc[setName].detachments += Number(actions.detachments || 0);
 
         return acc;
     }, {});
 
-    // Log dos tipos de componentes
-    const sets = Object.values(groupedComponents).filter(c => c.is_set);
-    const individuals = Object.values(groupedComponents).filter(c => !c.is_set);
-    
-    console.log('\nEstatísticas:');
-    console.log(`Total de component sets: ${sets.length}`);
-    console.log(`Total de componentes individuais: ${individuals.length}`);
+    // Sort components alphabetically
+    const result = Object.values(processedComponents)
+        .sort((a, b) => a.component_name.toLowerCase().localeCompare(b.component_name.toLowerCase()));
 
-    // Calcula o total de variantes
-    Object.values(groupedComponents).forEach(group => {
-        group.total_variants = group.is_set ? group.component_keys.size : 1;
-        delete group.component_keys;
-        delete group.is_set;
-    });
-
-    // Converte para array e ordena
-    let result = Object.values(groupedComponents);
-    result.sort((a, b) => {
-        const nameA = a.component_name.toLowerCase();
-        const nameB = b.component_name.toLowerCase();
-        
-        // Coloca componentes deprecados no final
-        if (nameA.startsWith('🚫') && !nameB.startsWith('🚫')) return 1;
-        if (!nameA.startsWith('🚫') && nameB.startsWith('🚫')) return -1;
-        
-        return nameA.localeCompare(nameB);
-    });
-
-    // Log dos componentes processados
-    console.log('\nComponentes processados:');
-    console.log('Component Name | Total Variants | Usages | Type');
-    console.log('------------------------------------------------');
+    // Detailed component listing
+    console.log('\n=== COMPONENT LIST ===');
+    console.log('Component Name | Total Variants | Usages (total) | Inserts (period) | Detachs (period)');
+    console.log('--------------------------------------------------------------------------------');
     result.forEach(comp => {
-        const type = sets.includes(comp) ? 'SET' : 'INDIVIDUAL';
-        console.log(`${comp.component_name} | ${comp.total_variants} | ${comp.usages} | ${type}`);
+        console.log(
+            `${comp.component_name.padEnd(20)} | ` +
+            `${String(comp.total_variants).padEnd(14)} | ` +
+            `${String(comp.usages).padEnd(13)} | ` +
+            `${String(comp.insertions || 'N/A').padEnd(15)} | ` +
+            `${comp.detachments || 'N/A'}`
+        );
     });
 
     return result;
@@ -500,51 +499,43 @@ function processComponents(components, actions, usages) {
 // Main function to generate component report
 async function generateComponentReport(fileId, startDate, endDate, debug = false) {
     try {
-        console.log('Iniciando geração do relatório...');
+        console.log('Starting report generation...');
+        console.log('Report period:', { startDate, endDate });
         
-        // Busca o nome da biblioteca
+        // Fetch library name
         const libraryName = await fetchFileMetadata(fileId);
-        console.log('Nome da biblioteca:', libraryName);
+        console.log('Library name:', libraryName);
 
-        // Busca os componentes
+        // Fetch components
         const components = await fetchComponents(fileId);
-        console.log('Componentes encontrados:', components.length);
+        console.log('Components found:', components.length);
 
-        // Busca todas as ações
-        const actions = await fetchAllComponentActions(fileId, startDate, endDate);
-        console.log('Ações encontradas:', actions.length);
+        // Fetch component actions with specified period
+        const actionsData = await fetchComponentActions(fileId, startDate, endDate);
+        console.log('Action data found:', Object.keys(actionsData).length);
         
-        // Busca os dados de uso
+        // Fetch usage data
         const usages = await fetchComponentUsages(fileId);
-        console.log('Dados de uso encontrados:', Object.keys(usages).length);
+        console.log('Usage data found:', Object.keys(usages).length);
 
         if (DEBUG) {
-            console.log('Amostra de dados:');
-            console.log('- Primeiro componente:', components[0]);
-            console.log('- Primeira ação:', actions[0]);
-            console.log('- Primeiro uso:', Object.entries(usages)[0]);
+            console.log('Data samples:');
+            console.log('- First component:', components[0]);
+            console.log('- First action:', Object.entries(actionsData)[0]);
+            console.log('- First usage:', Object.entries(usages)[0]);
         }
 
-        // Processa os dados das ações em um formato mais fácil de usar
-        const processedActions = actions.reduce((acc, action) => {
-            acc[action.component_key] = {
-                insertions: action.insertions || 0,
-                detachments: action.detachments || 0
-            };
-            return acc;
-        }, {});
+        // Process and aggregate components
+        const reportData = processComponents(components, actionsData, usages);
+        console.log('Report data prepared:', reportData.length);
 
-        // Processa e agrega os componentes
-        const reportData = processComponents(components, processedActions, usages);
-        console.log('Dados do relatório preparados:', reportData.length);
-
-        // Gera o nome do arquivo
+        // Generate filename
         const fileName = `${normalizeString(libraryName)}_${moment().format('YYYY-MM-DD')}`;
         
-        // Gera o CSV
+        // Generate CSV
         await extractDataToCSV(reportData, fileName);
         
-        // Gera o MD
+        // Generate MD
         const executionTime = process.hrtime()[0];
         await saveLogMarkdown(
             fileName,
@@ -556,11 +547,55 @@ async function generateComponentReport(fileId, startDate, endDate, debug = false
             moment().subtract(1, 'week').format('YYYY-MM-DD')
         );
 
-        console.log('Relatório gerado com sucesso!');
+        console.log('Report generated successfully!');
         return reportData;
     } catch (error) {
-        console.error('Erro ao gerar relatório:', error);
+        console.error('Error generating report:', error);
         throw error;
+    }
+}
+
+// Função para buscar e processar usos dos componentes
+async function fetchComponentUsages(fileId) {
+    try {
+        console.log('\n=== COMPONENT USAGE DATA ===');
+        
+        const response = await axios.get(
+            `${FIGMA_ANALYTICS_URL}${fileId}/component/usages`,
+            {
+                headers: {
+                    'X-Figma-Token': FIGMA_TOKEN
+                },
+                params: {
+                    group_by: 'component'
+                }
+            }
+        );
+
+        console.log('First 3 rows of response:');
+        console.log(response.data?.rows?.slice(0, 3).map(row => ({
+            component_key: row.component_key,
+            component_name: row.component_name,
+            component_set_name: row.component_set_name,
+            usages: row.usages
+        })));
+
+        // Process usages by component_key
+        const usagesByKey = {};
+        (response.data?.rows || []).forEach(row => {
+            if (!row.component_key) return;
+            usagesByKey[row.component_key] = {
+                usages: parseInt(row.usages) || 0
+            };
+        });
+
+        console.log('\nFirst 3 processed usages:');
+        console.log(Object.entries(usagesByKey).slice(0, 3));
+
+        return usagesByKey;
+    } catch (error) {
+        console.error('Error fetching component usages:', error.message);
+        return {};
     }
 }
 

@@ -223,6 +223,21 @@ async function extractDataToCSV(components, fileName) {
             fs.mkdirSync(REPORTS_DIR);
         }
 
+        // Create CSV Writer instance
+        const csvWriter = createCsvWriter({
+            path: `${REPORTS_DIR}/${fileName}.csv`,
+            header: [
+                { id: 'component_name', title: 'Component Name' },
+                { id: 'total_variants', title: 'Total Variants' },
+                { id: 'usages', title: 'Usages' },
+                { id: 'insertions', title: 'Insertions' },
+                { id: 'detachments', title: 'Detachments' },
+                { id: 'updated_at', title: 'Updated At' },
+                { id: 'created_at', title: 'Created At' },
+                { id: 'type', title: 'Type' }
+            ]
+        });
+
         console.log('Preparing data for CSV...');
         
         // Sort components alphabetically

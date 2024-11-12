@@ -2,6 +2,26 @@
 
 This script generates a report of components from a Figma library. It uses the Figma API to gather data about components, actions, and usages, and then generates CSV and Markdown files to document the results.
 
+## ⚠️ Important: Plan Requirements
+
+This script requires a **Figma Enterprise Plan** due to its use of the Analytics Beta API. The following features are only available in the Enterprise plan:
+
+- Library Analytics API (Beta)
+- REST API for Variables
+- Advanced API Access
+- Activity Log API
+
+### Plan Comparison for API Features
+
+| Feature                    | Professional | Organization | Enterprise |
+|---------------------------|--------------|--------------|------------|
+| Basic REST API            | ✓            | ✓            | ✓          |
+| Webhooks                  | ✓            | ✓            | ✓          |
+| Library Analytics         | ✗            | Basic        | Full + API |
+| Variables API             | ✗            | ✗            | ✓          |
+| Activity Log API          | ✗            | ✗            | ✓          |
+| Private Plugins           | ✗            | ✓            | ✓          |
+
 ## Installation
 
 1. **Clone the repository**
@@ -90,7 +110,21 @@ Generated alongside the CSV with the same name pattern but .md extension, contai
 
 ## Prerequisites
 - Node.js
+- Figma Enterprise Plan
 - Figma API Token with `library_analytics:read` permission
+
+## API Rate Limits
+- Enterprise accounts have higher rate limits for API calls
+- Contact Figma support for specific rate limit information for your account
+- The script includes automatic retry logic for rate-limited requests
+
+## Known Limitations
+1. Library Analytics API is in beta and subject to change
+2. Some features may require additional Enterprise plan features
+3. API access patterns may be monitored and rate-limited based on usage
+
+## Pricing Information
+For current pricing and plan comparison, visit [Figma Pricing Page](https://www.figma.com/pricing/).
 
 ## License
 This project is licensed under the MIT License.

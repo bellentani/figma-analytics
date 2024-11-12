@@ -126,11 +126,11 @@ async function fetchComponents(libraryFileKey) {
     }
 }
 
-// Função para buscar e processar ações
+// Function to fetch and process component actions
 async function fetchComponentActions(fileId, startDate, endDate) {
     try {
-        console.log('\n=== DADOS DO ENDPOINT COMPONENT/ACTIONS ===');
-        console.log('Buscando ações para o período:', { startDate, endDate });
+        console.log('\n=== COMPONENT ACTIONS DATA ===');
+        console.log('Fetching actions for period:', { startDate, endDate });
         
         const response = await axios.get(
             `${FIGMA_ANALYTICS_URL}${fileId}/component/actions`,
@@ -146,61 +146,44 @@ async function fetchComponentActions(fileId, startDate, endDate) {
             }
         );
 
-        console.log('Estrutura da resposta de actions:', {
+        console.log('Response structure:', {
             cursor: response.data?.cursor,
             next_page: response.data?.next_page,
             total_rows: response.data?.rows?.length,
-            periodo: `${startDate} até ${endDate}`
+            period: `${startDate} to ${endDate}`
         });
 
-        // Log das primeiras 3 linhas para debug
-        console.log('Primeiras 3 linhas da resposta de actions:');
-        console.log(response.data?.rows?.slice(0, 3).map(row => ({
-            component_key: row.component_key,
-            component_name: row.component_name,
-            component_set_name: row.component_set_name,
-            week: row.week,
-            insertions: row.insertions,
-            detachments: row.detachments
-        })));
-
-        // Agrupa por component_set_key (para variantes) ou component_key (para componentes individuais)
+        // Group actions by key
         const actionsByKey = (response.data?.rows || []).reduce((acc, row) => {
-            const key = row.component_set_key || row.component_key;
-            if (!key) return acc;
+            const key = row.component_key;
             
             if (!acc[key]) {
                 acc[key] = {
                     insertions: 0,
-                    detachments: 0,
-                    weeks: new Set()
+                    detachments: 0
                 };
             }
 
-            acc[key].insertions += parseInt(row.insertions) || 0;
-            acc[key].detachments += parseInt(row.detachments) || 0;
-            if (row.week) {
-                acc[key].weeks.add(row.week);
-            }
+            acc[key].insertions += Number(row.insertions || 0);
+            acc[key].detachments += Number(row.detachments || 0);
 
             return acc;
         }, {});
 
-        // Log do processamento para debug
-        console.log('\nPrimeiras 3 ações processadas:');
+        // Debug log for processed data
+        console.log('\nFirst 3 processed actions:');
         console.log(Object.entries(actionsByKey).slice(0, 3).map(([key, data]) => ({
             key,
             insertions: data.insertions,
-            detachments: data.detachments,
-            total_weeks: data.weeks.size
+            detachments: data.detachments
         })));
 
         return actionsByKey;
     } catch (error) {
-        console.error('Erro ao buscar ações dos componentes:', error.message);
+        console.error('Error fetching component actions:', error.message);
         if (error.response) {
             console.error('Status:', error.response.status);
-            console.error('Dados:', error.response.data);
+            console.error('Data:', error.response.data);
         }
         return {};
     }
@@ -331,7 +314,7 @@ function normalizeString(string) {
         .toLowerCase();
 }
 
-// Função para validar formato de data
+// Function to validate date format
 function isValidDate(dateStr) {
     const regex = /^\d{4}-\d{2}-\d{2}$/;
     if (!regex.test(dateStr)) return false;
@@ -339,7 +322,7 @@ function isValidDate(dateStr) {
     return date instanceof Date && !isNaN(date);
 }
 
-// Função para processar o período
+// Function to process period
 function parsePeriod(periodStr) {
     const validPeriods = {
         '30d': 30,
@@ -348,10 +331,10 @@ function parsePeriod(periodStr) {
         '1y': 365
     };
 
-    // Remove aspas se houver
+    // Remove quotes if present
     periodStr = (periodStr || '30d').replace(/['"]/g, '');
 
-    // Verifica se é um período customizado
+    // Check if it's a custom period
     if (periodStr.includes(',')) {
         const [startStr, endStr] = periodStr.split(',').map(d => d.trim());
         return {
@@ -360,7 +343,7 @@ function parsePeriod(periodStr) {
         };
     }
 
-    // Verifica se é um período válido
+    // Validate if period is valid
     if (!validPeriods[periodStr]) {
         throw new Error('Invalid period. Use 30d, 60d, 90d, 1y or custom format (YYYY-MM-DD, YYYY-MM-DD)');
     }
@@ -375,10 +358,10 @@ function parsePeriod(periodStr) {
     };
 }
 
-// Função para buscar todas as páginas de ações dos componentes
+// Function to fetch all component actions pages
 async function fetchAllComponentActions(fileId, startDate, endDate) {
     try {
-        console.log('Buscando ações para o período:', { startDate, endDate });
+        console.log('Fetching actions for period:', { startDate, endDate });
         
         const response = await axios.get(
             `${FIGMA_ANALYTICS_URL}${fileId}/component/actions`,
@@ -395,11 +378,11 @@ async function fetchAllComponentActions(fileId, startDate, endDate) {
         );
 
         if (DEBUG) {
-            console.log('Resposta da API de ações:', {
+            console.log('Actions API response:', {
                 status: response.status,
-                estrutura: response.data ? Object.keys(response.data) : 'sem dados',
-                temRows: !!response.data?.rows,
-                quantidadeRows: response.data?.rows?.length
+                structure: response.data ? Object.keys(response.data) : 'no data',
+                hasRows: !!response.data?.rows,
+                rowCount: response.data?.rows?.length
             });
         }
 
@@ -410,14 +393,14 @@ async function fetchAllComponentActions(fileId, startDate, endDate) {
             detachments: parseInt(action.detachments) || 0
         }));
     } catch (error) {
-        console.error('Erro ao buscar aões dos componentes:', error.message);
+        console.error('Error fetching component actions:', error.message);
         return [];
     }
 }
 
-// Função para processar os dados das ações
+// Function to process action data
 function processComponentActions(actions) {
-    // Agrupa as ações por componente
+    // Group actions by component
     return actions.reduce((acc, row) => {
         const key = row.component_key;
         
@@ -437,7 +420,7 @@ function processComponentActions(actions) {
     }, {});
 }
 
-// Função para processar e agregar componentes
+// Function to process and aggregate components
 function processComponents(components, actionsData, usages) {
     console.log('\n=== PROCESSING COMPONENTS ===');
     console.log('Actions data received:', {
@@ -539,14 +522,13 @@ async function generateComponentReport(fileId, startDate, endDate, debug = false
         const reportData = processComponents(components, actionsData, usages);
         console.log('Report data prepared:', reportData.length);
 
-        // Generate filename with current timestamp
+        // Generate filename with timestamp
         const timestamp = moment().format('YYYY-MM-DD-HH-mm');
         const fileName = `report_${normalizeString(libraryName)}_${timestamp}`;
         
-        // Generate CSV
+        // Generate CSV and MD files
         await extractDataToCSV(reportData, fileName);
         
-        // Generate MD
         const executionTime = process.hrtime()[0];
         await saveLogMarkdown(
             fileName,
@@ -566,7 +548,7 @@ async function generateComponentReport(fileId, startDate, endDate, debug = false
     }
 }
 
-// Função para buscar e processar usos dos componentes
+// Function to fetch and process component usages
 async function fetchComponentUsages(fileId) {
     try {
         console.log('\n=== COMPONENT USAGE DATA ===');
@@ -583,15 +565,7 @@ async function fetchComponentUsages(fileId) {
             }
         );
 
-        console.log('First 3 rows of response:');
-        console.log(response.data?.rows?.slice(0, 3).map(row => ({
-            component_key: row.component_key,
-            component_name: row.component_name,
-            component_set_name: row.component_set_name,
-            usages: row.usages
-        })));
-
-        // Process usages by component_key
+        // Process usages by component key
         const usagesByKey = {};
         (response.data?.rows || []).forEach(row => {
             if (!row.component_key) return;
@@ -600,6 +574,7 @@ async function fetchComponentUsages(fileId) {
             };
         });
 
+        // Debug log for processed data
         console.log('\nFirst 3 processed usages:');
         console.log(Object.entries(usagesByKey).slice(0, 3));
 

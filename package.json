@@ -4,7 +4,10 @@
   "description": "Aplicação para gerar relatórios CSV de bibliotecas do Figma utilizando a API de Analytics",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "report": "node src/cli/run.js",
+    "report:dev": "cross-env NODE_ENV=development node src/index.js",
+    "report:lib": "cross-env node src/index.js --files",
+    "report:lib:dev": "cross-env NODE_ENV=development node src/index.js --files"
   },
   "dependencies": {
     "axios": "^0.24.0",
@@ -16,5 +19,11 @@
     "yargs": "^17.7.2"
   },
   "author": "Poe Bellentani",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "cross-env": "^7.0.3"
+  },
+  "bin": {
+    "report": "./src/cli/run.js"
+  }
 }

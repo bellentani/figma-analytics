@@ -307,6 +307,7 @@ function normalizeString(string) {
         .replace(/[\u0300-\u036f]/g, '')     // Remove accents
         .replace(/[^a-z0-9]/gi, '_')         // Replace non-alphanumeric with _
         .replace(/_+/g, '_')                 // Replace multiple _ with single _
+        .replace(/^_|_$/g, '')              // Remove leading/trailing underscores
         .toLowerCase();
 }
 
@@ -433,10 +434,10 @@ function processComponents(components, actionsData, usages) {
 }
 
 // Main function to generate component report
-async function generateComponentReport(fileId, startDate, endDate, debug = false) {
+async function generateComponentReport(fileId, startDate, endDate, period, debug = false) {
     try {
         console.log('Starting report generation...');
-        console.log('Report period:', { startDate, endDate });
+        console.log('Report period:', { startDate, endDate, period });
         
         // Fetch library name
         const libraryName = await fetchFileMetadata(fileId);
@@ -465,11 +466,18 @@ async function generateComponentReport(fileId, startDate, endDate, debug = false
         const reportData = processComponents(components, actionsData, usages);
         console.log('Report data prepared:', reportData.length);
 
-        // Generate filename with timestamp
+        // Generate filename with library name, period and timestamp
         const timestamp = moment().format('YYYY-MM-DD-HH-mm');
-        const fileName = `report_${normalizeString(libraryName)}_${timestamp}`;
+        const normalizedLibraryName = normalizeString(libraryName).replace(/_+/g, '_').replace(/^_|_$/g, '');
         
-        // Generate CSV and MD files
+        // Format period for filename
+        const periodStr = period.startsWith('custom') 
+            ? `custom_${startDate.replace(/-/g, '')}to${endDate.replace(/-/g, '')}`
+            : period;
+
+        const fileName = `report_${normalizedLibraryName}_${periodStr}_${timestamp}`;
+        
+        // Generate CSV
         await extractDataToCSV(reportData, fileName);
         
         const executionTime = process.hrtime()[0];
@@ -564,7 +572,7 @@ async function fetchComponentUsages(fileId) {
 
         console.log('\n=== STARTING BATCH REPORT GENERATION ===');
         console.log('Files to process:', fileIds.length);
-        console.log('Period:', { startDate, endDate });
+        console.log('Period:', { period: argv.period, startDate, endDate });
 
         // Process each file sequentially
         for (let i = 0; i < fileIds.length; i++) {
@@ -572,11 +580,10 @@ async function fetchComponentUsages(fileId) {
             console.log(`\n[${i + 1}/${fileIds.length}] Processing file ID: ${fileId}`);
             
             try {
-                await generateComponentReport(fileId, startDate, endDate, argv.debug);
+                await generateComponentReport(fileId, startDate, endDate, argv.period, argv.debug);
                 console.log(`✓ Report generated successfully for file ID: ${fileId}`);
             } catch (error) {
                 console.error(`✗ Error generating report for file ID ${fileId}:`, error.message);
-                // Continue with next file even if current one fails
                 continue;
             }
         }

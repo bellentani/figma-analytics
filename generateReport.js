@@ -321,12 +321,13 @@ async function fetchFileMetadata(fileId) {
     }
 }
 
-// Nova função para normalizar caracteres especiais
+// Function to normalize special characters
 function normalizeString(string) {
     return string
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
-        .replace(/[^a-z0-9]/gi, '_') // Substitui caracteres não alfanuméricos por _
+        .replace(/[\u0300-\u036f]/g, '')     // Remove accents
+        .replace(/[^a-z0-9]/gi, '_')         // Replace non-alphanumeric with _
+        .replace(/_+/g, '_')                 // Replace multiple _ with single _
         .toLowerCase();
 }
 
@@ -614,7 +615,7 @@ async function fetchComponentUsages(fileId) {
     const argv = yargs
         .option('files', {
             alias: 'f',
-            description: 'Figma file key(s)',
+            description: 'Comma-separated Figma file keys',
             type: 'string',
             demandOption: true
         })
@@ -627,66 +628,46 @@ async function fetchComponentUsages(fileId) {
         .help()
         .argv;
 
-    // Função para calcular o período
-    function calculatePeriod(periodStr) {
-        const validPeriods = {
-            '30d': 30,
-            '60d': 60,
-            '90d': 90,
-            '1y': 365
-        };
+    try {
+        // Process file IDs
+        const fileIds = argv.files
+            .replace(/['"]/g, '') // Remove quotes
+            .split(',')           // Split by comma
+            .map(id => id.trim()) // Remove whitespace
+            .filter(id => id);    // Remove empty entries
 
-        // Remove aspas se houver
-        const cleanPeriod = periodStr.replace(/['"]/g, '');
-
-        // Verifica se é um período válido
-        if (!validPeriods[cleanPeriod]) {
-            console.error('Invalid period. Using default (30d)');
-            return validPeriods['30d'];
+        if (fileIds.length === 0) {
+            console.error('Error: No file IDs provided. Please provide at least one file ID.');
+            process.exit(1);
         }
 
-        return validPeriods[cleanPeriod];
-    }
+        // Calculate period dates
+        const { startDate, endDate } = parsePeriod(argv.period);
 
-    // Função para formatar data como YYYY-MM-DD
-    function formatDate(date) {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
+        console.log('\n=== STARTING BATCH REPORT GENERATION ===');
+        console.log('Files to process:', fileIds.length);
+        console.log('Period:', { startDate, endDate });
 
-    // Processa os IDs dos arquivos
-    const fileIds = argv.files
-        .replace(/['"]/g, '')
-        .split(',')
-        .map(id => id.trim())
-        .filter(id => id);
+        // Process each file sequentially
+        for (let i = 0; i < fileIds.length; i++) {
+            const fileId = fileIds[i];
+            console.log(`\n[${i + 1}/${fileIds.length}] Processing file ID: ${fileId}`);
+            
+            try {
+                await generateComponentReport(fileId, startDate, endDate, argv.debug);
+                console.log(`✓ Report generated successfully for file ID: ${fileId}`);
+            } catch (error) {
+                console.error(`✗ Error generating report for file ID ${fileId}:`, error.message);
+                // Continue with next file even if current one fails
+                continue;
+            }
+        }
 
-    // Calcula as datas do período
-    const days = calculatePeriod(argv.period);
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - days);
-
-    // Formata as datas para a API
-    const periodDates = {
-        startDate: formatDate(startDate),
-        endDate: formatDate(endDate)
-    };
-
-    if (argv.debug) {
-        console.log('Period:', {
-            days,
-            startDate: periodDates.startDate,
-            endDate: periodDates.endDate
-        });
-    }
-
-    if (fileIds.length === 0) {
-        console.error('Error: No file ID provided. Please provide at least one file ID to generate the report.');
+        console.log('\n=== BATCH REPORT GENERATION COMPLETED ===');
+        console.log(`Total files processed: ${fileIds.length}`);
+    } catch (error) {
+        console.error('Error in batch processing:', error);
         process.exit(1);
     }
-    await generateComponentReport(fileIds, periodDates.startDate, periodDates.endDate, argv.debug);
 })();
 

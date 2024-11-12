@@ -146,21 +146,16 @@ async function fetchComponentActions(fileId, startDate, endDate) {
             }
         );
 
-        console.log('Response structure:', {
-            cursor: response.data?.cursor,
-            next_page: response.data?.next_page,
-            total_rows: response.data?.rows?.length,
-            period: `${startDate} to ${endDate}`
-        });
-
-        // Group actions by key
-        const actionsByKey = (response.data?.rows || []).reduce((acc, row) => {
-            const key = row.component_key;
+        // Group actions by set name or component name
+        const actionsByName = (response.data?.rows || []).reduce((acc, row) => {
+            // Use component_set_name if available (for Sets) or component_name (for Singles)
+            const key = row.component_set_name || row.component_name;
             
             if (!acc[key]) {
                 acc[key] = {
                     insertions: 0,
-                    detachments: 0
+                    detachments: 0,
+                    type: row.component_set_name ? 'Set' : 'Single'
                 };
             }
 
@@ -172,13 +167,14 @@ async function fetchComponentActions(fileId, startDate, endDate) {
 
         // Debug log for processed data
         console.log('\nFirst 3 processed actions:');
-        console.log(Object.entries(actionsByKey).slice(0, 3).map(([key, data]) => ({
-            key,
+        console.log(Object.entries(actionsByName).slice(0, 3).map(([name, data]) => ({
+            name,
+            type: data.type,
             insertions: data.insertions,
             detachments: data.detachments
         })));
 
-        return actionsByKey;
+        return actionsByName;
     } catch (error) {
         console.error('Error fetching component actions:', error.message);
         if (error.response) {
@@ -360,12 +356,9 @@ function processComponents(components, actionsData, usages) {
     
     const processedComponents = components.reduce((acc, component) => {
         const setName = component.containing_frame?.name || component.name;
-        const componentKey = component.key;
-
-        // Format dates
-        const formattedUpdatedAt = moment(component.updated_at).format('YYYY-MM-DD-HH-mm');
-        const formattedCreatedAt = moment(component.created_at).format('YYYY-MM-DD-HH-mm');
-
+        const componentName = component.name;
+        
+        // Initialize component if not exists
         if (!acc[setName]) {
             acc[setName] = {
                 component_name: setName,
@@ -373,23 +366,26 @@ function processComponents(components, actionsData, usages) {
                 usages: 0,
                 insertions: 0,
                 detachments: 0,
-                updated_at: formattedUpdatedAt,
-                created_at: formattedCreatedAt,
+                updated_at: moment(component.updated_at).format('YYYY-MM-DD-HH-mm'),
+                created_at: moment(component.created_at).format('YYYY-MM-DD-HH-mm'),
                 type: 'Single'
             };
         }
 
-        // Rest of the processing...
+        // Update variants count and type
         acc[setName].total_variants++;
         if (acc[setName].total_variants > 1) {
             acc[setName].type = 'Set';
         }
 
-        acc[setName].usages += Number(usages[componentKey]?.usages || 0);
+        // Add usage data based on component key
+        acc[setName].usages += Number(usages[component.key]?.usages || 0);
 
-        if (actionsData[componentKey]) {
-            acc[setName].insertions += Number(actionsData[componentKey].insertions || 0);
-            acc[setName].detachments += Number(actionsData[componentKey].detachments || 0);
+        // Add actions data based on set name or component name
+        const actionKey = acc[setName].type === 'Set' ? setName : componentName;
+        if (actionsData[actionKey]) {
+            acc[setName].insertions = Number(actionsData[actionKey].insertions || 0);
+            acc[setName].detachments = Number(actionsData[actionKey].detachments || 0);
         }
 
         return acc;
@@ -399,10 +395,21 @@ function processComponents(components, actionsData, usages) {
     const result = Object.values(processedComponents)
         .sort((a, b) => a.component_name.toLowerCase().localeCompare(b.component_name.toLowerCase()));
 
-    // Component listing with formatted dates
+    // Debug log for actions matching
+    console.log('\nComponents with actions:');
+    result.forEach(comp => {
+        if (comp.insertions > 0 || comp.detachments > 0) {
+            console.log(`${comp.component_name} (${comp.type}):`, {
+                insertions: comp.insertions,
+                detachments: comp.detachments
+            });
+        }
+    });
+
+    // Component listing
     console.log('\n=== COMPONENT LIST ===');
-    console.log('Component Name | Total Variants | Usages (total) | Inserts (period) | Detachs (period) | Type | Updated At | Created At');
-    console.log('----------------------------------------------------------------------------------------------------------------');
+    console.log('Component Name | Total Variants | Usages (total) | Inserts (period) | Detachs (period) | Type');
+    console.log('-----------------------------------------------------------------------------------------');
     result.forEach(comp => {
         console.log(
             `${comp.component_name.padEnd(20)} | ` +
@@ -410,9 +417,7 @@ function processComponents(components, actionsData, usages) {
             `${String(comp.usages).padEnd(13)} | ` +
             `${String(comp.insertions || 0).padEnd(15)} | ` +
             `${String(comp.detachments || 0).padEnd(14)} | ` +
-            `${comp.type.padEnd(6)} | ` +
-            `${comp.updated_at} | ` +
-            `${comp.created_at}`
+            `${comp.type}`
         );
     });
 

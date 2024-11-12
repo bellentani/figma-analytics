@@ -314,14 +314,6 @@ function normalizeString(string) {
         .toLowerCase();
 }
 
-// Function to validate date format
-function isValidDate(dateStr) {
-    const regex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!regex.test(dateStr)) return false;
-    const date = new Date(dateStr);
-    return date instanceof Date && !isNaN(date);
-}
-
 // Function to process period
 function parsePeriod(periodStr) {
     const validPeriods = {
@@ -356,68 +348,6 @@ function parsePeriod(periodStr) {
         startDate: startDate.toISOString().split('T')[0],
         endDate: endDate.toISOString().split('T')[0]
     };
-}
-
-// Function to fetch all component actions pages
-async function fetchAllComponentActions(fileId, startDate, endDate) {
-    try {
-        console.log('Fetching actions for period:', { startDate, endDate });
-        
-        const response = await axios.get(
-            `${FIGMA_ANALYTICS_URL}${fileId}/component/actions`,
-            {
-                headers: {
-                    'X-Figma-Token': FIGMA_TOKEN
-                },
-                params: {
-                    group_by: 'component',
-                    start_date: startDate,
-                    end_date: endDate
-                }
-            }
-        );
-
-        if (DEBUG) {
-            console.log('Actions API response:', {
-                status: response.status,
-                structure: response.data ? Object.keys(response.data) : 'no data',
-                hasRows: !!response.data?.rows,
-                rowCount: response.data?.rows?.length
-            });
-        }
-
-        const actions = response.data?.rows || [];
-        return actions.map(action => ({
-            component_key: action.component_key,
-            insertions: parseInt(action.insertions) || 0,
-            detachments: parseInt(action.detachments) || 0
-        }));
-    } catch (error) {
-        console.error('Error fetching component actions:', error.message);
-        return [];
-    }
-}
-
-// Function to process action data
-function processComponentActions(actions) {
-    // Group actions by component
-    return actions.reduce((acc, row) => {
-        const key = row.component_key;
-        
-        if (!acc[key]) {
-            acc[key] = {
-                component_name: row.component_set_name || row.component_name,
-                component_key: key,
-                insertions: 0,
-                detachments: 0
-            };
-        }
-
-        acc[key].insertions += row.insertions || 0;
-        acc[key].detachments += row.detachments || 0;
-
-        return acc;
-    }, {});
 }
 
 // Function to process and aggregate components

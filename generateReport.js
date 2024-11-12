@@ -439,12 +439,18 @@ function processComponentActions(actions) {
 // Função para processar e agregar componentes
 function processComponents(components, actionsData, usages) {
     console.log('\n=== PROCESSING COMPONENTS ===');
-    console.log('Total actions received:', Object.keys(actionsData).length);
+    console.log('Actions data received:', {
+        totalKeys: Object.keys(actionsData).length,
+        sample: Object.entries(actionsData).slice(0, 2)
+    });
     
     const processedComponents = components.reduce((acc, component) => {
         const setName = component.containing_frame?.name || component.name;
         const componentKey = component.key;
-        const setKey = component.containing_frame?.nodeId;
+
+        // Format dates
+        const formattedUpdatedAt = moment(component.updated_at).format('YYYY-MM-DD-HH-mm');
+        const formattedCreatedAt = moment(component.created_at).format('YYYY-MM-DD-HH-mm');
 
         if (!acc[setName]) {
             acc[setName] = {
@@ -453,48 +459,36 @@ function processComponents(components, actionsData, usages) {
                 usages: 0,
                 insertions: 0,
                 detachments: 0,
-                updated_at: component.updated_at,
-                created_at: component.created_at,
-                type: 'Single' // Default as Single, will update to Set if total_variants > 1
+                updated_at: formattedUpdatedAt,
+                created_at: formattedCreatedAt,
+                type: 'Single'
             };
         }
 
-        // Increment variants count
+        // Rest of the processing...
         acc[setName].total_variants++;
-
-        // Update type based on total variants
         if (acc[setName].total_variants > 1) {
             acc[setName].type = 'Set';
         }
 
-        // Add usage data
         acc[setName].usages += Number(usages[componentKey]?.usages || 0);
 
-        // Add actions data - try both component key and set key
-        const componentActions = actionsData[componentKey];
-        const setActions = actionsData[setKey];
-
-        if (componentActions) {
-            acc[setName].insertions += Number(componentActions.insertions || 0);
-            acc[setName].detachments += Number(componentActions.detachments || 0);
-        }
-
-        if (setActions) {
-            acc[setName].insertions += Number(setActions.insertions || 0);
-            acc[setName].detachments += Number(setActions.detachments || 0);
+        if (actionsData[componentKey]) {
+            acc[setName].insertions += Number(actionsData[componentKey].insertions || 0);
+            acc[setName].detachments += Number(actionsData[componentKey].detachments || 0);
         }
 
         return acc;
     }, {});
 
-    // Sort and prepare final result
+    // Sort results
     const result = Object.values(processedComponents)
         .sort((a, b) => a.component_name.toLowerCase().localeCompare(b.component_name.toLowerCase()));
 
-    // Detailed component listing
+    // Component listing with formatted dates
     console.log('\n=== COMPONENT LIST ===');
-    console.log('Component Name | Total Variants | Usages (total) | Inserts (period) | Detachs (period) | Type');
-    console.log('-----------------------------------------------------------------------------------------');
+    console.log('Component Name | Total Variants | Usages (total) | Inserts (period) | Detachs (period) | Type | Updated At | Created At');
+    console.log('----------------------------------------------------------------------------------------------------------------');
     result.forEach(comp => {
         console.log(
             `${comp.component_name.padEnd(20)} | ` +
@@ -502,7 +496,9 @@ function processComponents(components, actionsData, usages) {
             `${String(comp.usages).padEnd(13)} | ` +
             `${String(comp.insertions || 0).padEnd(15)} | ` +
             `${String(comp.detachments || 0).padEnd(14)} | ` +
-            `${comp.type}`
+            `${comp.type.padEnd(6)} | ` +
+            `${comp.updated_at} | ` +
+            `${comp.created_at}`
         );
     });
 
@@ -542,8 +538,9 @@ async function generateComponentReport(fileId, startDate, endDate, debug = false
         const reportData = processComponents(components, actionsData, usages);
         console.log('Report data prepared:', reportData.length);
 
-        // Generate filename
-        const fileName = `${normalizeString(libraryName)}_${moment().format('YYYY-MM-DD')}`;
+        // Generate filename with current timestamp
+        const timestamp = moment().format('YYYY-MM-DD-HH-mm');
+        const fileName = `report_${normalizeString(libraryName)}_${timestamp}`;
         
         // Generate CSV
         await extractDataToCSV(reportData, fileName);

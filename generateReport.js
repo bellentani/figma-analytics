@@ -233,8 +233,8 @@ async function extractDataToCSV(components, fileName) {
                 component_name: comp.component_name,
                 total_variants: comp.total_variants,
                 usages: comp.usages,
-                insertions: comp.insertions || 'N/A',
-                detachments: comp.detachments || 'N/A',
+                insertions: comp.insertions, //|| 'N/A'
+                detachments: comp.detachments, //|| 'N/A'
                 updated_at: comp.updated_at,
                 created_at: comp.created_at,
                 type: comp.type
@@ -395,13 +395,14 @@ function processComponents(components, actionsData, usages) {
     const result = Object.values(processedComponents)
         .sort((a, b) => a.component_name.toLowerCase().localeCompare(b.component_name.toLowerCase()));
 
-    // Debug log for actions matching
+    // Debug log for component data
     console.log('\nComponents with actions:');
     result.forEach(comp => {
         if (comp.insertions > 0 || comp.detachments > 0) {
             console.log(`${comp.component_name} (${comp.type}):`, {
+                variants: comp.total_variants === 1 ? 'N/A' : comp.total_variants,
                 insertions: comp.insertions,
-                detachments: comp.detachments
+                detachments: comp.detachments || 0
             });
         }
     });
@@ -413,7 +414,7 @@ function processComponents(components, actionsData, usages) {
     result.forEach(comp => {
         console.log(
             `${comp.component_name.padEnd(20)} | ` +
-            `${String(comp.total_variants).padEnd(14)} | ` +
+            `${(comp.total_variants === 1 ? 'N/A' : String(comp.total_variants)).padEnd(14)} | ` +
             `${String(comp.usages).padEnd(13)} | ` +
             `${String(comp.insertions || 0).padEnd(15)} | ` +
             `${String(comp.detachments || 0).padEnd(14)} | ` +
@@ -421,7 +422,14 @@ function processComponents(components, actionsData, usages) {
         );
     });
 
-    return result;
+    // Prepare data for CSV
+    const csvData = result.map(comp => ({
+        ...comp,
+        total_variants: comp.total_variants === 1 ? 'N/A' : comp.total_variants,
+        detachments: comp.detachments || 0
+    }));
+
+    return csvData;
 }
 
 // Main function to generate component report

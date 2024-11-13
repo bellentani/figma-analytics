@@ -1,10 +1,11 @@
 {
   "name": "figma-library-reporter",
   "version": "1.0.0",
-  "description": "Aplicação para gerar relatórios CSV de bibliotecas do Figma utilizando a API de Analytics",
+  "description": "Application to generate CSV reports from Figma libraries using Analytics API",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "report": "node generateReport.js"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",

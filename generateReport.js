@@ -554,46 +554,49 @@ async function fetchComponentUsages(fileId) {
 
 // Start the report generation process
 (async () => {
-    const argv = yargs
-        .option('files', {
-            alias: 'f',
-            description: 'Comma-separated Figma file keys',
-            type: 'string',
-            demandOption: true
-        })
-        .option('period', {
-            alias: 'p',
-            description: 'Analysis period (30d, 60d, 90d, 1y)',
-            type: 'string',
-            default: '30d'
-        })
-        .option('notion', {
-            alias: 'n',
-            description: 'Notion page ID for database creation',
-            type: 'string'
-        })
-        .help()
-        .argv;
+    // Get all command line arguments
+    const args = process.argv.slice(2);
+    
+    // Parse arguments
+    const params = {};
+    const flags = new Set();
+    
+    args.forEach(arg => {
+        if (arg.startsWith('--')) {
+            // It's a flag
+            flags.add(arg.slice(2));
+        } else if (arg.includes('=')) {
+            // It's a parameter
+            const [key, value] = arg.split('=');
+            // Remove quotes if present
+            params[key] = value.replace(/^["']|["']$/g, '');
+        }
+    });
 
     try {
         // Process file IDs
-        const fileIds = argv.files
-            .replace(/['"]/g, '') // Remove quotes
-            .split(',')           // Split by comma
-            .map(id => id.trim()) // Remove whitespace
-            .filter(id => id);    // Remove empty entries
+        if (!params.files) {
+            console.error('Error: files parameter is required. Use: files="fileId1,fileId2"');
+            process.exit(1);
+        }
+
+        const fileIds = params.files
+            .split(',')
+            .map(id => id.trim())
+            .filter(id => id);
 
         if (fileIds.length === 0) {
-            console.error('Error: No file IDs provided. Please provide at least one file ID.');
+            console.error('Error: No valid file IDs provided.');
             process.exit(1);
         }
 
         // Calculate period dates
-        const { startDate, endDate } = parsePeriod(argv.period);
+        const { startDate, endDate } = parsePeriod(params.period || '30d');
 
         console.log('\n=== STARTING BATCH REPORT GENERATION ===');
         console.log('Files to process:', fileIds.length);
-        console.log('Period:', { period: argv.period, startDate, endDate });
+        console.log('Period:', { period: params.period || '30d', startDate, endDate });
+        console.log('Debug mode:', flags.has('debug'));
 
         // Process each file sequentially
         for (let i = 0; i < fileIds.length; i++) {
@@ -601,7 +604,14 @@ async function fetchComponentUsages(fileId) {
             console.log(`\n[${i + 1}/${fileIds.length}] Processing file ID: ${fileId}`);
             
             try {
-                await generateComponentReport(fileId, startDate, endDate, argv.period, argv.notion, argv.debug);
+                await generateComponentReport(
+                    fileId, 
+                    startDate, 
+                    endDate, 
+                    params.period || '30d',
+                    params.notion,
+                    flags.has('debug')
+                );
                 console.log(`✓ Report generated successfully for file ID: ${fileId}`);
             } catch (error) {
                 console.error(`✗ Error generating report for file ID ${fileId}:`, error.message);

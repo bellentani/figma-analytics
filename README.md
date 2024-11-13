@@ -143,5 +143,3 @@ For current pricing and plan comparison, visit [Figma Pricing Page](https://www.
 
 ## License
 This project is licensed under the MIT License.
-
-npm run report files="tmTpuPqySUPu53Eqc16A76" notion="13dcab09dc3e80d59fd8e85aaa2dbdfd" period="30d" --debug

@@ -171,7 +171,6 @@ async function createSummaryDatabase(parentPageId, libraryName, period = '30d', 
         const now = reportDate ? new Date(reportDate) : new Date();
         const formattedDateTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} - ${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
 
-        // Usar o mesmo padrão do report principal
         const databaseTitle = `Figma Component Report - ${libraryName} - ${formattedDateTime} - ${period} - Summary`;
         
         const response = await notion.databases.create({
@@ -191,44 +190,49 @@ async function createSummaryDatabase(parentPageId, libraryName, period = '30d', 
                 "01. Library Name": {
                     title: {}
                 },
-                "02. Total Components": {
+                "02. Lib Tag Name": {
+                    select: {
+                        options: [] // Opções serão preenchidas dinamicamente
+                    }
+                },
+                "03. Total Components": {
                     number: {
                         format: "number"
                     }
                 },
-                "03. Total Variants": {
+                "04. Total Variants": {
                     number: {
                         format: "number"
                     }
                 },
-                "04. Total Usages": {
+                "05. Total Usages": {
                     number: {
                         format: "number"
                     }
                 },
-                "05. Total Insertions": {
+                "06. Total Insertions": {
                     number: {
                         format: "number"
                     }
                 },
-                "06. Total Detachments": {
+                "07. Total Detachments": {
                     number: {
                         format: "number"
                     }
                 },
-                "07. Generation Date": {
+                "08. Generation Date": {
                     date: {}
                 },
-                "08. Period Start": {
+                "09. Period Start": {
                     date: {}
                 },
-                "09. Period End": {
+                "10. Period End": {
                     date: {}
                 },
-                "10. Last Valid Week": {
+                "11. Last Valid Week": {
                     date: {}
                 },
-                "11. Execution Time": {
+                "12. Execution Time": {
                     rich_text: {}
                 }
             }
@@ -244,12 +248,10 @@ async function createSummaryDatabase(parentPageId, libraryName, period = '30d', 
 
 async function addSummaryEntry(databaseId, summary) {
     try {
-        // Extrair datas do período
         const [startDate, endDate] = summary.selectedPeriod
             .split(' to ')
             .map(date => date.trim());
 
-        // Criar o objeto de entrada antes do try/catch
         const entryData = {
             parent: { database_id: databaseId },
             properties: {
@@ -260,42 +262,47 @@ async function addSummaryEntry(databaseId, summary) {
                         } 
                     }]
                 },
-                "02. Total Components": {
+                "02. Lib Tag Name": {
+                    select: {
+                        name: summary.libraryName || 'Unnamed Library'
+                    }
+                },
+                "03. Total Components": {
                     number: Number(summary.totalComponents) || 0
                 },
-                "03. Total Variants": {
+                "04. Total Variants": {
                     number: Number(summary.totalVariants) || 0
                 },
-                "04. Total Usages": {
+                "05. Total Usages": {
                     number: Number(summary.totalUsages) || 0
                 },
-                "05. Total Insertions": {
+                "06. Total Insertions": {
                     number: Number(summary.totalInsertions) || 0
                 },
-                "06. Total Detachments": {
+                "07. Total Detachments": {
                     number: Number(summary.totalDetachments) || 0
                 },
-                "07. Generation Date": {
+                "08. Generation Date": {
                     date: { 
                         start: moment(summary.generationDate).format('YYYY-MM-DD')
                     }
                 },
-                "08. Period Start": {
+                "09. Period Start": {
                     date: { 
                         start: moment(startDate).format('YYYY-MM-DD')
                     }
                 },
-                "09. Period End": {
+                "10. Period End": {
                     date: { 
                         start: moment(endDate).format('YYYY-MM-DD')
                     }
                 },
-                "10. Last Valid Week": {
+                "11. Last Valid Week": {
                     date: { 
                         start: moment(summary.lastClosedValidWeek).format('YYYY-MM-DD')
                     }
                 },
-                "11. Execution Time": {
+                "12. Execution Time": {
                     rich_text: [{ 
                         text: { 
                             content: summary.executionTime || '00:00:00'
@@ -305,7 +312,6 @@ async function addSummaryEntry(databaseId, summary) {
             }
         };
 
-        // Criar a entrada no Notion
         await notion.pages.create(entryData);
         console.log('Summary entry added successfully');
     } catch (error) {

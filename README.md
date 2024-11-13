@@ -1,6 +1,6 @@
 # Figma Library Report Usage
 
-This script generates a report of components from a Figma library. It uses the Figma API to gather data about components, actions, and usages, and then generates CSV and Markdown files to document the results.
+This script generates a report of components from a Figma library, creating both CSV reports and Notion databases with usage analytics data.
 
 ## ⚠️ Important: Plan Requirements
 
@@ -36,38 +36,31 @@ This script requires a **Figma Enterprise Plan** due to its use of the Analytics
    ```
 
 3. **Set up environment variables**
-   Create a `.env` file in the root directory with your Figma API token:
+   Create a `.env` file in the root directory:
    ```env
    FIGMA_TOKEN=your_figma_api_token_here
+   NOTION_TOKEN=your_notion_token_here  # optional
    ```
-
-   You can find more information on how to generate a Figma API key here: [Figma API Key Documentation](https://www.figma.com/developers/api#access-tokens)
 
 ## Usage
 
-Run the script using Node.js:
+### Basic Usage (CSV Report)
 ```bash
-node generateReport.js --files="file_key1,file_key2" --period="30d"
+node generateReport.js --files="fileId1,fileId2" --period="30d"
+```
+
+### With Notion Integration
+```bash
+node generateReport.js --files="fileId1" --period="30d" --notion="notion_page_id"
 ```
 
 ### Options
-- `--files`: Required. Comma-separated list of Figma library file keys.
-- `--period`: Optional. Analysis period (default: "30d")
+- `--files` or `-f`: Required. Comma-separated Figma file IDs
+- `--period` or `-p`: Optional. Analysis period (default: "30d")
   - Valid options: "30d", "60d", "90d", "1y"
-  - For custom period, use: "custom[YYYY-MM-DD,YYYY-MM-DD]"
-- `--debug`: Optional. Enable debug mode for additional logging.
-
-### Example Commands
-```bash
-# Generate report for single file with default period (30d)
-node generateReport.js --files="your_file_key_here"
-
-# Generate report for multiple files with specific period
-node generateReport.js --files="file_key1,file_key2" --period="90d"
-
-# Generate report with custom date range
-node generateReport.js --files="your_file_key_here" --period="custom[2024-01-01,2024-02-01]"
-```
+  - Custom: "custom[YYYY-MM-DD,YYYY-MM-DD]"
+- `--notion` or `-n`: Optional. Notion page ID for database creation
+- `--debug`: Optional. Enable debug logs
 
 ## Output Files
 
@@ -77,7 +70,20 @@ Generated in the `reports` folder with filename format:
 report_library-name_period_YYYY-MM-DD-HH-mm.csv
 ```
 
-Columns:
+### Notion Database
+- Name: `Figma Component Report - {file name} - {YYYY-MM-DD - HH-MM} - {period}`
+- Columns:
+  1. Component Name
+  2. Total Variants
+  3. Usages
+  4. Insertions (period)
+  5. Detachments (period)
+  6. Created At
+  7. Updated At
+  8. Type
+
+### Data Structure
+Both outputs include:
 - Component Name
 - Total Variants (N/A for single components)
 - Usages (total)
@@ -87,13 +93,19 @@ Columns:
 - Updated At (YYYY-MM-DD-HH-mm)
 - Created At (YYYY-MM-DD-HH-mm)
 
-### Markdown Log
-Generated alongside the CSV with the same name pattern but .md extension, containing:
-- Library name
-- Total components
-- Report generation date
-- Time period analyzed
-- Execution time
+## Notion Integration Setup
+
+1. Create a Notion integration:
+   - Go to [Notion Developers](https://www.notion.so/my-integrations)
+   - Create new integration
+   - Copy token to `.env` file
+2. Share your Notion page with the integration
+3. Get the page ID from the URL
+
+### Notion Database Features
+- Automatic sorting by Component Name
+- Numeric prefixes in column names to maintain order
+- Real-time updates during report generation
 
 ## Component Types
 - **Single**: Components with only one variant (Total Variants shown as "N/A")
@@ -105,23 +117,26 @@ Generated alongside the CSV with the same name pattern but .md extension, contai
   - Component Name for Singles
 - Detachments show "0" when no detachments occurred (not "N/A")
 - The script processes multiple files sequentially
-- Each file generates its own CSV and MD report
+- Each file generates its own CSV and Notion database
 - Debug mode provides detailed API response information
 
 ## Prerequisites
 - Node.js
 - Figma Enterprise Plan
 - Figma API Token with `library_analytics:read` permission
+- Notion account and integration (optional)
 
 ## API Rate Limits
-- Enterprise accounts have higher rate limits for API calls
-- Contact Figma support for specific rate limit information for your account
+- Figma Enterprise accounts have higher rate limits
+- Notion API has a limit of 100 requests per minute
 - The script includes automatic retry logic for rate-limited requests
 
 ## Known Limitations
 1. Library Analytics API is in beta and subject to change
-2. Some features may require additional Enterprise plan features
-3. API access patterns may be monitored and rate-limited based on usage
+2. Some features require Enterprise plan features
+3. API access patterns may be monitored and rate-limited
+4. Notion columns maintain numeric prefixes for ordering
+5. Custom date ranges must be within the last year
 
 ## Pricing Information
 For current pricing and plan comparison, visit [Figma Pricing Page](https://www.figma.com/pricing/).

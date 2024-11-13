@@ -5,12 +5,14 @@ async function createNotionDatabase(parentPageId, period = '30d', libraryName, r
     try {
         console.log('Creating Notion database...');
         
-        const formattedDate = reportDate 
-            ? new Date(reportDate).toISOString().split('T')[0]
-            : new Date().toISOString().split('T')[0];
+        // Format the date and time
+        const now = reportDate ? new Date(reportDate) : new Date();
+        const formattedDateTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} - ${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
 
-        const databaseTitle = `Figma Component Report - ${libraryName} - ${formattedDate} - ${period}`;
+        const databaseTitle = `Figma Component Report - ${libraryName} - ${formattedDateTime} - ${period}`;
         
+        console.log('Creating database with title:', databaseTitle);
+
         const response = await notion.databases.create({
             parent: {
                 type: 'page_id',
@@ -85,69 +87,74 @@ async function addComponentsToNotion(databaseId, components) {
     try {
         console.log('Adding components to Notion database...');
         
+        // Format date to ISO 8601
         const formatDate = (dateString) => {
             if (!dateString) return null;
             const [year, month, day, hour, minute] = dateString.split(/[-:]/).map(Number);
             return new Date(year, month - 1, day, hour, minute).toISOString();
         };
 
+        // Sort components in reverse alphabetical order (Z->A)
         const sortedComponents = [...components].sort((a, b) => 
-            a.component_name.localeCompare(b.component_name)
+            b.component_name.localeCompare(a.component_name)
         );
         
         console.log('Total components to add:', sortedComponents.length);
+        console.log('First component to be added:', sortedComponents[0].component_name);
+        console.log('Last component to be added:', sortedComponents[sortedComponents.length - 1].component_name);
 
-        const batchSize = 10;
-        for (let i = 0; i < sortedComponents.length; i += batchSize) {
-            const batch = sortedComponents.slice(i, i + batchSize);
-            console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(sortedComponents.length/batchSize)}`);
+        // Process one component at a time in reverse order
+        for (let i = 0; i < sortedComponents.length; i++) {
+            const component = sortedComponents[i];
+            console.log(`Adding component ${i + 1}/${sortedComponents.length}: ${component.component_name}`);
 
-            await Promise.all(batch.map(async (component) => {
-                try {
-                    await notion.pages.create({
-                        parent: { database_id: databaseId },
-                        properties: {
-                            'Component Name': {
-                                title: [{ text: { content: component.component_name } }]
-                            },
-                            'Usages': {
-                                number: component.usages || 0
-                            },
-                            'Insertions': {
-                                number: component.insertions || 0
-                            },
-                            'Detachments': {
-                                number: component.detachments || 0
-                            },
-                            'Created At': {
-                                date: { 
-                                    start: formatDate(component.created_at)
-                                }
-                            },
-                            'Updated At': {
-                                date: { 
-                                    start: formatDate(component.updated_at)
-                                }
-                            },
-                            'Type': {
-                                select: { name: component.type }
+            try {
+                await notion.pages.create({
+                    parent: { database_id: databaseId },
+                    properties: {
+                        'Component Name': {
+                            title: [{ text: { content: component.component_name } }]
+                        },
+                        'Total Variants': {
+                            number: component.total_variants || 0
+                        },
+                        'Usages': {
+                            number: component.usages || 0
+                        },
+                        'Insertions': {
+                            number: component.insertions || 0
+                        },
+                        'Detachments': {
+                            number: component.detachments || 0
+                        },
+                        'Created At': {
+                            date: { 
+                                start: formatDate(component.created_at)
                             }
+                        },
+                        'Updated At': {
+                            date: { 
+                                start: formatDate(component.updated_at)
+                            }
+                        },
+                        'Type': {
+                            select: { name: component.type }
                         }
-                    });
-                } catch (error) {
-                    console.error(`Error adding component ${component.component_name}:`, error.message);
-                    console.error('Component data:', {
-                        name: component.component_name,
-                        created: component.created_at,
-                        updated: component.updated_at,
-                        formatted_created: formatDate(component.created_at),
-                        formatted_updated: formatDate(component.updated_at)
-                    });
-                }
-            }));
+                    }
+                });
 
-            if (i + batchSize < sortedComponents.length) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Add a small delay between requests to avoid rate limits
+                await new Promise(resolve => setTimeout(resolve, 250));
+                
+            } catch (error) {
+                console.error(`Error adding component ${component.component_name}:`, error.message);
+                console.error('Component data:', {
+                    name: component.component_name,
+                    created: component.created_at,
+                    updated: component.updated_at,
+                    formatted_created: formatDate(component.created_at),
+                    formatted_updated: formatDate(component.updated_at)
+                });
             }
         }
 

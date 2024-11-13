@@ -26,28 +26,31 @@ async function createNotionDatabase(parentPageId, period = '30d', libraryName, r
             ],
             properties: {
                 'Component Name': {
-                    title: {},
-                    name: 'Component Name'
+                    title: {}
+                },
+                'Total Variants': {
+                    number: {
+                        format: 'number'
+                    }
                 },
                 'Usages': {
-                    number: {},
-                    name: 'Usages'
+                    number: {}
                 },
                 'Insertions': {
-                    number: {},
-                    name: `Insertions (${period})`
+                    number: {
+                        format: 'number'
+                    }
                 },
                 'Detachments': {
-                    number: {},
-                    name: `Detachments (${period})`
+                    number: {
+                        format: 'number'
+                    }
                 },
                 'Created At': {
-                    date: {},
-                    name: 'Created At'
+                    date: {}
                 },
                 'Updated At': {
-                    date: {},
-                    name: 'Updated At'
+                    date: {}
                 },
                 'Type': {
                     select: {
@@ -55,8 +58,7 @@ async function createNotionDatabase(parentPageId, period = '30d', libraryName, r
                             { name: 'Single', color: 'blue' },
                             { name: 'Set', color: 'green' }
                         ]
-                    },
-                    name: 'Type'
+                    }
                 }
             }
         });

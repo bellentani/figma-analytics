@@ -1,9 +1,17 @@
 const { Client } = require('@notionhq/client');
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 
-async function createNotionDatabase(parentPageId) {
+async function createNotionDatabase(parentPageId, period = '30d', libraryName, reportDate) {
     try {
         console.log('Creating Notion database...');
+        
+        // Format the date
+        const formattedDate = reportDate 
+            ? new Date(reportDate).toISOString().split('T')[0]
+            : new Date().toISOString().split('T')[0];
+
+        // Create database title
+        const databaseTitle = `Figma Component Report - ${libraryName} - ${formattedDate} - ${period}`;
         
         const response = await notion.databases.create({
             parent: {
@@ -14,31 +22,30 @@ async function createNotionDatabase(parentPageId) {
                 {
                     type: 'text',
                     text: {
-                        content: 'Figma Components Analytics'
+                        content: databaseTitle
                     }
                 }
             ],
             properties: {
                 'Component Name': {
-                    title: {}
+                    title: {},
+                    name: 'Component Name'
                 },
                 'Total Variants': {
-                    rich_text: {}
+                    number: {},
+                    name: 'Total Variants'
                 },
                 'Usages': {
-                    number: {}
+                    number: {},
+                    name: 'Usages'
                 },
                 'Insertions': {
-                    number: {}
+                    number: {},
+                    name: `Insertions (${period})`
                 },
                 'Detachments': {
-                    number: {}
-                },
-                'Updated At': {
-                    rich_text: {}
-                },
-                'Created At': {
-                    rich_text: {}
+                    number: {},
+                    name: `Detachments (${period})`
                 },
                 'Type': {
                     select: {
@@ -46,12 +53,13 @@ async function createNotionDatabase(parentPageId) {
                             { name: 'Single', color: 'blue' },
                             { name: 'Set', color: 'green' }
                         ]
-                    }
+                    },
+                    name: 'Type'
                 }
             }
         });
 
-        console.log('Database created successfully');
+        console.log('Database created successfully:', databaseTitle);
         return response.id;
     } catch (error) {
         console.error('Error creating Notion database:', error.message);
@@ -64,7 +72,6 @@ async function addComponentsToNotion(databaseId, components) {
         console.log('Adding components to Notion database...');
         console.log('Total components to add:', components.length);
 
-        // Process components in batches to avoid rate limits
         const batchSize = 10;
         for (let i = 0; i < components.length; i += batchSize) {
             const batch = components.slice(i, i + batchSize);
@@ -79,22 +86,16 @@ async function addComponentsToNotion(databaseId, components) {
                                 title: [{ text: { content: component.component_name } }]
                             },
                             'Total Variants': {
-                                rich_text: [{ text: { content: String(component.total_variants) } }]
+                                number: component.total_variants === 'N/A' ? 0 : component.total_variants
                             },
                             'Usages': {
-                                number: component.usages
+                                number: component.usages || 0
                             },
                             'Insertions': {
-                                number: component.insertions
+                                number: component.insertions || 0
                             },
                             'Detachments': {
-                                number: component.detachments
-                            },
-                            'Updated At': {
-                                rich_text: [{ text: { content: component.updated_at } }]
-                            },
-                            'Created At': {
-                                rich_text: [{ text: { content: component.created_at } }]
+                                number: component.detachments || 0
                             },
                             'Type': {
                                 select: { name: component.type }
@@ -106,7 +107,6 @@ async function addComponentsToNotion(databaseId, components) {
                 }
             }));
 
-            // Add delay between batches to respect rate limits
             if (i + batchSize < components.length) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }

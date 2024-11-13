@@ -484,7 +484,12 @@ async function generateComponentReport(fileId, startDate, endDate, period, notio
         // Após gerar o CSV, criar database no Notion e adicionar dados se o notionPageId foi fornecido
         if (process.env.NOTION_TOKEN && notionPageId) {
             console.log('\nStarting Notion integration...');
-            const databaseId = await createNotionDatabase(notionPageId);
+            const databaseId = await createNotionDatabase(
+                notionPageId,
+                period,
+                libraryName,
+                new Date()  // ou você pode passar startDate se preferir
+            );
             console.log('Notion database created:', databaseId);
             
             await addComponentsToNotion(databaseId, reportData);

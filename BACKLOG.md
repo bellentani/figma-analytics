@@ -3,6 +3,98 @@
 ## Overview
 This document outlines the future vision and planned improvements for the Figma Library Analytics tool, aiming to transform it from a CLI tool into a comprehensive service-oriented analytics platform.
 
+## Current Status
+
+### ✅ Implemented Features
+- [x] Notion integration for report generation
+  - [x] Create database automatically
+  - [x] Add component data
+  - [x] Maintain column order with numeric prefixes
+- [ ] Advanced filtering options
+  - [x] Filter by date range (custom periods)
+  - [ ] Filter by component type
+  - [ ] Filter by usage threshold
+
+### 🚀 Upcoming Features
+- [ ] Support for multiple file types
+  - [ ] JSON export
+  - [ ] Excel export
+  - [ ] PDF export
+- [ ] Visualization features
+  - [ ] Usage trends graphs
+  - [ ] Component adoption charts
+  - [ ] Team usage analytics
+- [ ] Integration options
+  - [ ] Slack notifications
+  - [ ] Teams integration
+  - [ ] Email reports
+- [ ] Automation features
+  - [ ] Scheduled reports
+  - [ ] Automated backups
+  - [ ] Batch processing improvements
+
+### 🐛 Bug Fixes & Improvements
+- [ ] Improve error handling
+- [ ] Add retry mechanism for API failures
+- [ ] Optimize performance for large libraries
+- [ ] Add progress indicators
+- [ ] Improve logging system
+
+### 📚 Documentation
+- [ ] Add API documentation
+- [ ] Create contribution guidelines
+- [ ] Add troubleshooting guide
+- [ ] Improve setup instructions
+
+---
+
+## Strategic Roadmap
+
+### MVP (Minimum Viable Product)
+- ✅ Basic CSV report generation
+- ✅ Notion integration
+- ✅ Component usage analytics
+- ✅ Period-based analysis
+- ✅ Custom date ranges
+- 🔄 Basic error handling
+- 🔄 Documentation
+
+### Phase 1: Enhanced Reporting
+- 📋 Multiple export formats
+- 🔄 Advanced filtering
+  - ✅ Date range filtering
+  - 📋 Component type filtering
+  - 📋 Usage threshold filtering
+- 📋 Batch processing
+- 📋 Progress indicators
+- 📋 Improved logging
+
+### Phase 2: Visualization & Analytics
+- 📋 Usage trends
+- 📋 Adoption metrics
+- 📋 Team analytics
+- 📋 Custom dashboards
+- 📋 Performance metrics
+
+### Phase 3: Integration & Automation
+- 📋 Slack integration
+- 📋 Teams integration
+- 📋 Email reports
+- 📋 Scheduled reports
+- 📋 Automated backups
+
+### Phase 4: Enterprise Features
+- 📋 Multi-team support
+- 📋 Role-based access
+- 📋 Custom workflows
+- 📋 API access
+- 📋 Advanced security
+
+Legend:
+- ✅ Done
+- 🔄 In Progress
+- 📋 To Do
+
 ## Strategic Goals
 
 ### 1. Service-Oriented Architecture (SOA)

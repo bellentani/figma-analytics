@@ -46,21 +46,40 @@ This script requires a **Figma Enterprise Plan** due to its use of the Analytics
 
 ### Basic Usage (CSV Report)
 ```bash
-node generateReport.js --files="fileId1,fileId2" --period="30d"
+npm run report files="fileId1,fileId2" period="30d"
 ```
 
 ### With Notion Integration
 ```bash
-node generateReport.js --files="fileId1" --period="30d" --notion="notion_page_id"
+npm run report files="fileId1" period="30d" notion="notion_page_id" --debug
 ```
 
 ### Options
-- `--files` or `-f`: Required. Comma-separated Figma file IDs
-- `--period` or `-p`: Optional. Analysis period (default: "30d")
+- `files`: Required. Comma-separated Figma file IDs
+- `period`: Optional. Analysis period (default: "30d")
   - Valid options: "30d", "60d", "90d", "1y"
   - Custom: "custom[YYYY-MM-DD,YYYY-MM-DD]"
-- `--notion` or `-n`: Optional. Notion page ID for database creation
+- `notion`: Optional. Notion page ID for database creation
 - `--debug`: Optional. Enable debug logs
+
+### Command Format
+- Parameters with values: `parameter="value"`
+- Boolean flags: `--flag`
+
+Examples:
+```bash
+# Basic report
+npm run report files="tmTpuPqySUPu53Eqc16A76"
+
+# Multiple files with custom period
+npm run report files="id1,id2,id3" period="90d"
+
+# With Notion and debug
+npm run report files="fileId" notion="pageId" --debug
+
+# Custom date range
+npm run report files="fileId" period="custom[2024-01-01,2024-02-01]"
+```
 
 ## Output Files
 
@@ -121,7 +140,7 @@ Both outputs include:
 - Debug mode provides detailed API response information
 
 ## Prerequisites
-- Node.js
+- Node.js >= 16.0.0
 - Figma Enterprise Plan
 - Figma API Token with `library_analytics:read` permission
 - Notion account and integration (optional)

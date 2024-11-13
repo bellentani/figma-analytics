@@ -1,10 +1,10 @@
 {
   "name": "figma-library-reporter",
   "version": "1.0.0",
-  "description": "Application to generate CSV reports from Figma libraries using Analytics API",
-  "main": "index.js",
+  "description": "Generate reports of components from Figma libraries, creating both CSV reports and Notion databases with usage analytics data. Requires Figma Enterprise Plan.",
+  "main": "generateReport.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node generateReport.js",
     "report": "node generateReport.js"
   },
   "dependencies": {
@@ -17,6 +17,27 @@
     "moment": "^2.29.1",
     "yargs": "^17.7.2"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bellentani/figma-analytics.git"
+  },
+  "keywords": [
+    "figma",
+    "analytics",
+    "components",
+    "design-system",
+    "notion",
+    "report",
+    "csv",
+    "enterprise"
+  ],
   "author": "Poe Bellentani",
-  "license": "ISC"
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bellentani/figma-analytics/issues"
+  },
+  "homepage": "https://github.com/bellentani/figma-analytics#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  }
 }

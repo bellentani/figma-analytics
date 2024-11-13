@@ -5,14 +5,11 @@ async function createNotionDatabase(parentPageId, period = '30d', libraryName, r
     try {
         console.log('Creating Notion database...');
         
-        // Format the date and time
         const now = reportDate ? new Date(reportDate) : new Date();
         const formattedDateTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} - ${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
 
         const databaseTitle = `Figma Component Report - ${libraryName} - ${formattedDateTime} - ${period}`;
         
-        console.log('Creating database with title:', databaseTitle);
-
         const response = await notion.databases.create({
             parent: {
                 type: 'page_id',
@@ -27,34 +24,36 @@ async function createNotionDatabase(parentPageId, period = '30d', libraryName, r
                 }
             ],
             properties: {
-                'Component Name': {
+                "1. Component Name": {
                     title: {}
                 },
-                'Total Variants': {
+                "2. Total Variants": {
                     number: {
-                        format: 'number'
+                        format: "number"
                     }
                 },
-                'Usages': {
-                    number: {}
-                },
-                'Insertions': {
+                "3. Usages": {
                     number: {
-                        format: 'number'
+                        format: "number"
                     }
                 },
-                'Detachments': {
+                "4. Insertions": {
                     number: {
-                        format: 'number'
+                        format: "number"
                     }
                 },
-                'Created At': {
+                "5. Detachments": {
+                    number: {
+                        format: "number"
+                    }
+                },
+                "6. Created At": {
                     date: {}
                 },
-                'Updated At': {
+                "7. Updated At": {
                     date: {}
                 },
-                'Type': {
+                "8. Type": {
                     select: {
                         options: [
                             { name: 'Single', color: 'blue' },
@@ -63,16 +62,6 @@ async function createNotionDatabase(parentPageId, period = '30d', libraryName, r
                     }
                 }
             }
-        });
-
-        await notion.databases.update({
-            database_id: response.id,
-            sorts: [
-                {
-                    property: 'Component Name',
-                    direction: 'ascending'
-                }
-            ]
         });
 
         console.log('Database created successfully:', databaseTitle);
@@ -87,23 +76,18 @@ async function addComponentsToNotion(databaseId, components) {
     try {
         console.log('Adding components to Notion database...');
         
-        // Format date to ISO 8601
         const formatDate = (dateString) => {
             if (!dateString) return null;
             const [year, month, day, hour, minute] = dateString.split(/[-:]/).map(Number);
             return new Date(year, month - 1, day, hour, minute).toISOString();
         };
 
-        // Sort components in reverse alphabetical order (Z->A)
         const sortedComponents = [...components].sort((a, b) => 
             b.component_name.localeCompare(a.component_name)
         );
         
         console.log('Total components to add:', sortedComponents.length);
-        console.log('First component to be added:', sortedComponents[0].component_name);
-        console.log('Last component to be added:', sortedComponents[sortedComponents.length - 1].component_name);
 
-        // Process one component at a time in reverse order
         for (let i = 0; i < sortedComponents.length; i++) {
             const component = sortedComponents[i];
             console.log(`Adding component ${i + 1}/${sortedComponents.length}: ${component.component_name}`);
@@ -112,38 +96,37 @@ async function addComponentsToNotion(databaseId, components) {
                 await notion.pages.create({
                     parent: { database_id: databaseId },
                     properties: {
-                        'Component Name': {
+                        "1. Component Name": {
                             title: [{ text: { content: component.component_name } }]
                         },
-                        'Total Variants': {
+                        "2. Total Variants": {
                             number: component.total_variants || 0
                         },
-                        'Usages': {
+                        "3. Usages": {
                             number: component.usages || 0
                         },
-                        'Insertions': {
+                        "4. Insertions": {
                             number: component.insertions || 0
                         },
-                        'Detachments': {
+                        "5. Detachments": {
                             number: component.detachments || 0
                         },
-                        'Created At': {
+                        "6. Created At": {
                             date: { 
                                 start: formatDate(component.created_at)
                             }
                         },
-                        'Updated At': {
+                        "7. Updated At": {
                             date: { 
                                 start: formatDate(component.updated_at)
                             }
                         },
-                        'Type': {
+                        "8. Type": {
                             select: { name: component.type }
                         }
                     }
                 });
 
-                // Add a small delay between requests to avoid rate limits
                 await new Promise(resolve => setTimeout(resolve, 250));
                 
             } catch (error) {
@@ -159,6 +142,10 @@ async function addComponentsToNotion(databaseId, components) {
         }
 
         console.log('All components added successfully to Notion');
+        
+        // Note: Column renaming was removed due to Notion API limitations
+        // The columns will maintain their numeric prefixes to ensure correct ordering
+        
     } catch (error) {
         console.error('Error adding components to Notion:', error.message);
         throw error;

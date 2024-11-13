@@ -8,13 +8,21 @@ const INCLUDE_VARIANTS = args.includes('--include-variants');
 
 let period = '30days';
 const periodOptions = ['30days', '60days', '90days', '1year', 'custom'];
+let fileIds = [];
+
 args.forEach(arg => {
-    if (periodOptions.includes(arg)) {
-        period = arg;
+    if (arg.startsWith('--files=')) {
+        fileIds = arg.split('=')[1].replace(/"/g, '').split(',');
+    } else if (arg.startsWith('--period=')) {
+        const periodArg = arg.split('=')[1].replace(/"/g, '');
+        if (periodOptions.includes(periodArg)) {
+            period = periodArg;
+        } else {
+            console.error(`Invalid period option: ${periodArg}. Valid options are: ${periodOptions.join(', ')}`);
+            process.exit(1);
+        }
     }
 });
-
-const fileIds = args.filter(arg => arg !== '--debug' && arg !== '--include-variants' && !periodOptions.includes(arg) && !arg.startsWith('custom'));
 
 if (DEBUG) {
     console.log('Figma Token used:', process.env.FIGMA_TOKEN);
@@ -27,6 +35,7 @@ const endDate = new Date().toISOString().split('T')[0];
 
 fileIds.forEach(async (fileId) => {
     try {
+        console.log('fileId', fileId);
         const fileData = await fetchFigmaFile(fileId);
         console.log(`Fetched data for file ${fileId}:`, fileData);
         if (INCLUDE_VARIANTS) {

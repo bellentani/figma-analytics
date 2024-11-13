@@ -7,6 +7,7 @@ const { performance } = require('perf_hooks'); // For measuring execution time
 const cliProgress = require('cli-progress'); // For progress bar
 const yargs = require('yargs');
 const https = require('https');
+const { createNotionDatabase, addComponentsToNotion } = require('./src/integrations/notion-integration');
 
 // Figma API settings
 const FIGMA_API_URL = 'https://api.figma.com/v1/files/';
@@ -434,7 +435,7 @@ function processComponents(components, actionsData, usages) {
 }
 
 // Main function to generate component report
-async function generateComponentReport(fileId, startDate, endDate, period, debug = false) {
+async function generateComponentReport(fileId, startDate, endDate, period, notionPageId, debug = false) {
     try {
         console.log('Starting report generation...');
         console.log('Report period:', { startDate, endDate, period });
@@ -480,6 +481,16 @@ async function generateComponentReport(fileId, startDate, endDate, period, debug
         // Generate CSV
         await extractDataToCSV(reportData, fileName);
         
+        // Após gerar o CSV, criar database no Notion e adicionar dados se o notionPageId foi fornecido
+        if (process.env.NOTION_TOKEN && notionPageId) {
+            console.log('\nStarting Notion integration...');
+            const databaseId = await createNotionDatabase(notionPageId);
+            console.log('Notion database created:', databaseId);
+            
+            await addComponentsToNotion(databaseId, reportData);
+            console.log('Data successfully added to Notion!');
+        }
+
         const executionTime = process.hrtime()[0];
         await saveLogMarkdown(
             fileName,
@@ -551,6 +562,11 @@ async function fetchComponentUsages(fileId) {
             type: 'string',
             default: '30d'
         })
+        .option('notion', {
+            alias: 'n',
+            description: 'Notion page ID for database creation',
+            type: 'string'
+        })
         .help()
         .argv;
 
@@ -580,7 +596,7 @@ async function fetchComponentUsages(fileId) {
             console.log(`\n[${i + 1}/${fileIds.length}] Processing file ID: ${fileId}`);
             
             try {
-                await generateComponentReport(fileId, startDate, endDate, argv.period, argv.debug);
+                await generateComponentReport(fileId, startDate, endDate, argv.period, argv.notion, argv.debug);
                 console.log(`✓ Report generated successfully for file ID: ${fileId}`);
             } catch (error) {
                 console.error(`✗ Error generating report for file ID ${fileId}:`, error.message);

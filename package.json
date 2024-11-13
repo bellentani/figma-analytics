@@ -7,6 +7,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "@notionhq/client": "^2.2.15",
     "axios": "^0.24.0",
     "cli-progress": "^3.9.1",
     "csv-writer": "^1.6.0",

@@ -42,43 +42,36 @@ This script requires a **Figma Enterprise Plan** due to its use of the Analytics
    NOTION_TOKEN=your_notion_token_here  # optional
    ```
 
-## Usage
+## Parameters
 
-### Basic Usage (CSV Report)
+| Parameter | Required | Description | Example |
+|-----------|----------|-------------|---------|
+| files | Yes | Figma file ID(s) to generate report. Can be multiple IDs separated by comma | `files="key1,key2"` |
+| period | No | Period to analyze data. Can be "7d", "15d", "30d", "90d" or custom range with dates in format YYYY-MM-DD. Default is "30d" | `period="7d"` or `period="2024-01-01,2024-01-31"` |
+| notion | No | Notion page ID to create the report database | `notion="page_id"` |
+| summary | No | Notion database ID to append summary data. If not provided, creates a new summary database | `summary="database_id"` |
+| debug | No | Enable debug mode for detailed logs. Default is false | `debug=true` |
+
+## Usage Examples
+
+Basic usage:
 ```bash
-npm run report files="fileId1,fileId2" period="30d"
-```
-
-### With Notion Integration
-```bash
-npm run report files="fileId1" period="30d" notion="notion_page_id" --debug
-```
-
-### Options
-- `files`: Required. Comma-separated Figma file IDs
-- `period`: Optional. Analysis period (default: "30d")
-  - Valid options: "30d", "60d", "90d", "1y"
-  - Custom: "custom[YYYY-MM-DD,YYYY-MM-DD]"
-- `notion`: Optional. Notion page ID for database creation
-- `--debug`: Optional. Enable debug logs
-
-### Command Format
-- Parameters with values: `parameter="value"`
-- Boolean flags: `--flag`
-
-Examples:
-```bash
-# Basic report
 npm run report files="tmTpuPqySUPu53Eqc16A76"
+```
 
-# Multiple files with custom period
-npm run report files="id1,id2,id3" period="90d"
+With custom period:
+```bash
+npm run report files="tmTpuPqySUPu53Eqc16A76" period="15d"
+```
 
-# With Notion and debug
-npm run report files="fileId" notion="pageId" --debug
+With Notion integration:
+```bash
+npm run report files="tmTpuPqySUPu53Eqc16A76" notion="notion_page_id"
+```
 
-# Custom date range
-npm run report files="fileId" period="custom[2024-01-01,2024-02-01]"
+With existing summary database:
+```bash
+npm run report files="tmTpuPqySUPu53Eqc16A76" notion="notion_page_id" summary="summary_database_id"
 ```
 
 ## Output Files

@@ -7,7 +7,7 @@ const { performance } = require('perf_hooks'); // For measuring execution time
 const cliProgress = require('cli-progress'); // For progress bar
 const yargs = require('yargs');
 const https = require('https');
-const { createNotionDatabase, addComponentsToNotion } = require('./src/integrations/notion-integration');
+const { createNotionDatabase, addComponentsToNotion, handleReportSummaryDatabase } = require('./src/integrations/notion-integration');
 
 // Figma API settings
 const FIGMA_API_URL = 'https://api.figma.com/v1/files/';
@@ -435,7 +435,7 @@ function processComponents(components, actionsData, usages) {
 }
 
 // Main function to generate component report
-async function generateComponentReport(fileId, startDate, endDate, period, notionPageId, debug = false) {
+async function generateComponentReport(fileId, startDate, endDate, period, notionPageId, summaryDatabaseId = null, debug = false) {
     const executionStartTime = process.hrtime();
     
     try {
@@ -449,7 +449,7 @@ async function generateComponentReport(fileId, startDate, endDate, period, notio
         const components = await fetchComponents(fileId);
         console.log('Components found:', components.length);
 
-        // Fetch component actions with specified period
+        // Fetch component actions
         const actionsData = await fetchComponentActions(fileId, startDate, endDate);
         console.log('Action data found:', Object.keys(actionsData).length);
         
@@ -457,58 +457,22 @@ async function generateComponentReport(fileId, startDate, endDate, period, notio
         const usages = await fetchComponentUsages(fileId);
         console.log('Usage data found:', Object.keys(usages).length);
 
-        if (DEBUG) {
-            console.log('Data samples:');
-            console.log('- First component:', components[0]);
-            console.log('- First action:', Object.entries(actionsData)[0]);
-            console.log('- First usage:', Object.entries(usages)[0]);
-        }
-
         // Process and aggregate components
         const reportData = processComponents(components, actionsData, usages);
         console.log('Report data prepared:', reportData.length);
 
-        // Generate filename with library name, period and timestamp
+        // Generate filename
         const timestamp = moment().format('YYYY-MM-DD-HH-mm');
         const normalizedLibraryName = normalizeString(libraryName).replace(/_+/g, '_').replace(/^_|_$/g, '');
-        
-        // Format period for filename
         const periodStr = period.startsWith('custom') 
             ? `custom_${startDate.replace(/-/g, '')}to${endDate.replace(/-/g, '')}`
             : period;
-
         const fileName = `report_${normalizedLibraryName}_${periodStr}_${timestamp}`;
-        
+
         // Generate CSV
         await extractDataToCSV(reportData, fileName);
-        
-        // Após gerar o CSV, criar database no Notion e adicionar dados se o notionPageId foi fornecido
-        if (process.env.NOTION_TOKEN && notionPageId) {
-            console.log('\nStarting Notion integration...');
-            const databaseId = await createNotionDatabase(
-                notionPageId,
-                period,
-                libraryName,
-                new Date()  // ou você pode passar startDate se preferir
-            );
-            console.log('Notion database created:', databaseId);
-            
-            await addComponentsToNotion(databaseId, reportData);
-            console.log('Data successfully added to Notion!');
-        }
 
-        const executionTime = process.hrtime()[0];
-        await saveLogMarkdown(
-            fileName,
-            libraryName,
-            reportData.length,
-            INCLUDE_VARIANTS ? reportData.length : reportData.reduce((acc, curr) => acc + curr.total_variants, 0),
-            executionTime,
-            `${startDate} to ${endDate}`,
-            moment().subtract(1, 'week').format('YYYY-MM-DD')
-        );
-
-        // Gerar sumário
+        // Generate summary before Notion integration
         const summary = await generateReportSummary(
             reportData,
             libraryName,
@@ -518,7 +482,32 @@ async function generateComponentReport(fileId, startDate, endDate, period, notio
             executionStartTime
         );
 
-        console.log('Report and summary generated successfully!');
+        // Se temos integração com Notion
+        if (process.env.NOTION_TOKEN && notionPageId) {
+            console.log('\nStarting Notion integration...');
+            
+            // Criar/atualizar database principal
+            const databaseId = await createNotionDatabase(
+                notionPageId,
+                period,
+                libraryName,
+                new Date()
+            );
+            await addComponentsToNotion(databaseId, reportData);
+            console.log('All components added successfully to Notion');
+            
+            // Gerenciar database de sumário
+            await handleReportSummaryDatabase(
+                notionPageId,
+                summaryDatabaseId,
+                summary,
+                libraryName
+            );
+            
+            console.log('Summary data successfully added to Notion!');
+        }
+
+        console.log('Report generated successfully!');
         return { reportData, summary };
     } catch (error) {
         console.error('Error generating report:', error);
@@ -724,6 +713,7 @@ Generated by Figma Library Report Tool
                     endDate, 
                     params.period || '30d',
                     params.notion,
+                    params.summary,
                     flags.has('debug')
                 );
                 console.log(`✓ Report generated successfully for file ID: ${fileId}`);

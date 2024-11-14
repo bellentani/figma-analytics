@@ -316,9 +316,6 @@ async function addSummaryEntry(databaseId, summary) {
         console.log('Summary entry added successfully');
     } catch (error) {
         console.error('Error adding summary entry:', error.message);
-        if (error.message.includes('validation_error')) {
-            console.error('Entry data that failed:', JSON.stringify(entryData, null, 2));
-        }
         throw error;
     }
 }

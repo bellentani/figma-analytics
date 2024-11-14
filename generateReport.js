@@ -568,7 +568,7 @@ async function generateReportSummary(reportData, libraryName, startDate, endDate
         libraryName: libraryName,
         totalComponents: reportData.length,
         totalVariants: reportData.reduce((sum, component) => {
-            return sum + (component.total_variants || 0);
+            return sum + (component.total_variants === 'N/A' ? 0 : (parseInt(component.total_variants) || 0));
         }, 0),
         totalUsages: reportData.reduce((sum, component) => {
             return sum + (component.usages || 0);
@@ -634,7 +634,7 @@ async function generateSummaryMD(summary, baseFileName) {
 ## Library Information
 - **Library Name:** ${summary.libraryName}
 - **Total Components:** ${summary.totalComponents}
-- **Total Variants:** ${summary.totalVariants}
+- **Total Variants (SUM):** ${summary.totalVariants}
 
 ## Usage Statistics
 - **Usage (total):** ${summary.totalUsages}

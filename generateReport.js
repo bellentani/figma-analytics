@@ -4,9 +4,6 @@ const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const moment = require('moment'); // For date manipulation
 const fs = require('fs');
 const { performance } = require('perf_hooks'); // For measuring execution time
-const cliProgress = require('cli-progress'); // For progress bar
-const yargs = require('yargs');
-const https = require('https');
 const { createNotionDatabase, addComponentsToNotion, handleReportSummaryDatabase } = require('./src/integrations/notion-integration');
 
 // Figma API settings
@@ -597,7 +594,6 @@ async function generateReportSummary(reportData, libraryName, startDate, endDate
 function calculateExecutionTime(startTime) {
     const endTime = process.hrtime(startTime);
     const seconds = endTime[0];
-    const milliseconds = endTime[1] / 1000000;
     
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);

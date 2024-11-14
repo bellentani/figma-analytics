@@ -10,14 +10,10 @@
   "dependencies": {
     "@notionhq/client": "^2.2.15",
     "axios": "^0.24.0",
-    "cli-progress": "^3.9.1",
     "csv-writer": "^1.6.0",
     "dotenv": "^10.0.0",
-    "fs": "0.0.1-security",
     "moment": "^2.29.1",
-    "yargs": "^17.7.2",
-    "perf_hooks": "^1.0.0",
-    "https": "^1.0.0"
+    "yargs": "^17.7.2"
   },
   "devDependencies": {
     "nodemon": "^2.0.15"

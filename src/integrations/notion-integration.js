@@ -77,21 +77,21 @@ async function addComponentsToNotion(databaseId, components) {
     try {
         console.log('Adding components to Notion database...');
         
-        // Ordenar componentes por nome e depois inverter a ordem
+        // Sort components by name and reverse the order
         const sortedComponents = [...components]
             .sort((a, b) => {
                 const nameA = a.component_name.toLowerCase();
                 const nameB = b.component_name.toLowerCase();
                 return nameA.localeCompare(nameB);
             })
-            .reverse(); // Inverte a ordem do array
+            .reverse();
         
         console.log('Total components to add:', sortedComponents.length);
         
         for (let i = 0; i < sortedComponents.length; i++) {
             const component = sortedComponents[i];
-            // Ajustando o log para mostrar a ordem reversa
-            console.log(`Adding component ${sortedComponents.length - i}/${sortedComponents.length}: ${component.component_name}`);
+            // Adjusting log to show progressive counting
+            console.log(`Adding component ${i + 1}/${sortedComponents.length}: ${component.component_name}`);
             
             try {
                 const pageData = {
@@ -148,13 +148,13 @@ async function handleReportSummaryDatabase(notionPageId, summaryDatabaseId, repo
     try {
         let databaseId = summaryDatabaseId;
 
-        // Se não foi fornecido um database ID, criar novo
+        // If no database ID is provided, create a new one
         if (!databaseId) {
             console.log('Creating new summary database...');
             databaseId = await createSummaryDatabase(notionPageId, libraryName, period, reportDate);
         }
 
-        // Adicionar nova entrada ao database
+        // Add new entry to database
         await addSummaryEntry(databaseId, reportSummary);
 
         return databaseId;
@@ -192,7 +192,7 @@ async function createSummaryDatabase(parentPageId, libraryName, period = '30d', 
                 },
                 "02. Lib Tag Name": {
                     select: {
-                        options: [] // Opções serão preenchidas dinamicamente
+                        options: [] // Options will be filled dynamically
                     }
                 },
                 "03. Total Components": {

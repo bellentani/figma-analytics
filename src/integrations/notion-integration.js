@@ -77,7 +77,6 @@ async function addComponentsToNotion(databaseId, components) {
     try {
         console.log('Adding components to Notion database...');
         
-        // Sort components by name and reverse the order
         const sortedComponents = [...components]
             .sort((a, b) => {
                 const nameA = a.component_name.toLowerCase();
@@ -88,9 +87,27 @@ async function addComponentsToNotion(databaseId, components) {
         
         console.log('Total components to add:', sortedComponents.length);
         
+        // Função auxiliar para converter data para ISO 8601
+        const formatToISO = (dateString) => {
+            if (!dateString) return moment().format('YYYY-MM-DD');
+            
+            // Se a data estiver no formato YYYY-MM-DD-HH-mm
+            const parts = dateString.split('-');
+            if (parts.length === 5) {
+                return `${parts[0]}-${parts[1]}-${parts[2]}`;
+            }
+            
+            // Se já for uma data ISO válida, retorna como está
+            if (moment(dateString, moment.ISO_8601, true).isValid()) {
+                return dateString;
+            }
+            
+            // Fallback para data atual
+            return moment().format('YYYY-MM-DD');
+        };
+        
         for (let i = 0; i < sortedComponents.length; i++) {
             const component = sortedComponents[i];
-            // Adjusting log to show progressive counting
             console.log(`Adding component ${i + 1}/${sortedComponents.length}: ${component.component_name}`);
             
             try {
@@ -114,16 +131,16 @@ async function addComponentsToNotion(databaseId, components) {
                         },
                         "6. Created At": {
                             date: { 
-                                start: moment(component.formatted_created).format('YYYY-MM-DD')
+                                start: formatToISO(component.created_at)
                             }
                         },
                         "7. Updated At": {
                             date: { 
-                                start: moment(component.formatted_updated).format('YYYY-MM-DD')
+                                start: formatToISO(component.updated_at)
                             }
                         },
                         "8. Type": {
-                            select: { 
+                            select: {
                                 name: component.type || 'Unknown'
                             }
                         }
@@ -133,7 +150,11 @@ async function addComponentsToNotion(databaseId, components) {
                 await notion.pages.create(pageData);
             } catch (error) {
                 console.error(`Error adding component ${component.component_name}:`, error.message);
-                console.error('Component data:', JSON.stringify(component, null, 2));
+                console.error('Component data:', {
+                    component_name: component.component_name,
+                    created_at: component.created_at,
+                    updated_at: component.updated_at
+                });
             }
         }
 
@@ -148,13 +169,11 @@ async function handleReportSummaryDatabase(notionPageId, summaryDatabaseId, repo
     try {
         let databaseId = summaryDatabaseId;
 
-        // If no database ID is provided, create a new one
         if (!databaseId) {
             console.log('Creating new summary database...');
             databaseId = await createSummaryDatabase(notionPageId, libraryName, period, reportDate);
         }
 
-        // Add new entry to database
         await addSummaryEntry(databaseId, reportSummary);
 
         return databaseId;
@@ -192,7 +211,7 @@ async function createSummaryDatabase(parentPageId, libraryName, period = '30d', 
                 },
                 "02. Lib Tag Name": {
                     select: {
-                        options: [] // Options will be filled dynamically
+                        options: []
                     }
                 },
                 "03. Total Components": {

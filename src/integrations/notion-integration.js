@@ -1,17 +1,6 @@
 const { Client } = require('@notionhq/client');
-const https = require('https');
+const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const moment = require('moment');
-
-// Criar cliente Notion com configuração SSL personalizada
-const notion = new Client({ 
-    auth: process.env.NOTION_TOKEN,
-    agent: new https.Agent({
-        rejectUnauthorized: false
-    })
-});
-
-// Função auxiliar para debug
-const DEBUG = process.argv.includes('--debug');
 
 async function createNotionDatabase(parentPageId, period = '30d', libraryName, reportDate) {
     try {
@@ -84,94 +73,94 @@ async function createNotionDatabase(parentPageId, period = '30d', libraryName, r
     }
 }
 
-// Função para validar dados do componente
-function validateComponentData(component) {
-    if (DEBUG) {
-        console.log('Validating component data:', component);
-    }
-
-    return {
-        component_name: component.component_name || 'Unnamed Component',
-        total_variants: typeof component.total_variants === 'number' ? component.total_variants : 0,
-        usages: typeof component.usages === 'number' ? component.usages : 0,
-        insertions: typeof component.insertions === 'number' ? component.insertions : 0,
-        detachments: typeof component.detachments === 'number' ? component.detachments : 0,
-        created_at: component.created_at || new Date().toISOString(),
-        updated_at: component.updated_at || new Date().toISOString(),
-        type: component.type || 'Unknown'
-    };
-}
-
 async function addComponentsToNotion(databaseId, components) {
     try {
         console.log('Adding components to Notion database...');
-        console.log('Total components to add:', components.length);
         
-        for (let i = 0; i < components.length; i++) {
-            const component = components[i];
-            const validatedData = validateComponentData(component);
+        const sortedComponents = [...components]
+            .sort((a, b) => {
+                const nameA = a.component_name.toLowerCase();
+                const nameB = b.component_name.toLowerCase();
+                return nameA.localeCompare(nameB);
+            })
+            .reverse();
+        
+        console.log('Total components to add:', sortedComponents.length);
+        
+        // Função auxiliar para converter data para ISO 8601
+        const formatToISO = (dateString) => {
+            if (!dateString) return moment().format('YYYY-MM-DD');
             
-            if (DEBUG) {
-                console.log(`Adding component ${i + 1}/${components.length}:`, validatedData);
+            // Se a data estiver no formato YYYY-MM-DD-HH-mm
+            const parts = dateString.split('-');
+            if (parts.length === 5) {
+                return `${parts[0]}-${parts[1]}-${parts[2]}`;
             }
+            
+            // Se já for uma data ISO válida, retorna como está
+            if (moment(dateString, moment.ISO_8601, true).isValid()) {
+                return dateString;
+            }
+            
+            // Fallback para data atual
+            return moment().format('YYYY-MM-DD');
+        };
+        
+        for (let i = 0; i < sortedComponents.length; i++) {
+            const component = sortedComponents[i];
+            console.log(`Adding component ${i + 1}/${sortedComponents.length}: ${component.component_name}`);
             
             try {
                 const pageData = {
                     parent: { database_id: databaseId },
                     properties: {
                         "1. Component Name": {
-                            title: [{ text: { content: validatedData.component_name } }]
+                            title: [{ text: { content: component.component_name || 'Unnamed Component' } }]
                         },
                         "2. Total Variants": {
-                            number: validatedData.total_variants
+                            number: Number(component.total_variants) || 0
                         },
                         "3. Usages": {
-                            number: validatedData.usages
+                            number: Number(component.usages) || 0
                         },
                         "4. Insertions": {
-                            number: validatedData.insertions
+                            number: Number(component.insertions) || 0
                         },
                         "5. Detachments": {
-                            number: validatedData.detachments
+                            number: Number(component.detachments) || 0
                         },
                         "6. Created At": {
                             date: { 
-                                start: moment(validatedData.created_at).format('YYYY-MM-DD')
+                                start: formatToISO(component.created_at)
                             }
                         },
                         "7. Updated At": {
                             date: { 
-                                start: moment(validatedData.updated_at).format('YYYY-MM-DD')
+                                start: formatToISO(component.updated_at)
                             }
                         },
                         "8. Type": {
                             select: {
-                                name: validatedData.type
+                                name: component.type || 'Unknown'
                             }
                         }
                     }
                 };
 
                 await notion.pages.create(pageData);
-                
-                if (DEBUG) {
-                    console.log(`✓ Component added successfully: ${validatedData.component_name}`);
-                }
             } catch (error) {
-                console.error(`Error adding component ${validatedData.component_name}:`, error.message);
-                if (DEBUG) {
-                    console.error('Full error:', error);
-                    console.error('Component data:', validatedData);
-                }
+                console.error(`Error adding component ${component.component_name}:`, error.message);
+                console.error('Component data:', {
+                    component_name: component.component_name,
+                    created_at: component.created_at,
+                    updated_at: component.updated_at
+                });
             }
         }
 
         console.log('All components added successfully to Notion');
     } catch (error) {
         console.error('Error adding components to Notion:', error.message);
-        if (DEBUG) {
-            console.error('Full error:', error);
-        }
         throw error;
     }
 }

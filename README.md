@@ -47,7 +47,7 @@ This script requires a **Figma Enterprise Plan** due to its use of the Analytics
 | Parameter | Required | Description | Example |
 |-----------|----------|-------------|---------|
 | files | Yes | Figma file ID(s) to generate report. Can be multiple IDs separated by comma | `files="key1,key2"` |
-| period | No | Period to analyze data. Can be "7d", "15d", "30d", "90d" or custom range with dates in format YYYY-MM-DD. Default is "30d" | `period="7d"` or `period="2024-01-01,2024-01-31"` |
+| period | No | Period to analyze data. Can be "30d", "60d", "90d" or custom range with dates in format YYYY-MM-DD. Default is "30d" | `period="7d"` or `period="2024-01-01,2024-01-31"` |
 | notion | No | Notion page ID to create the report database | `notion="page_id"` |
 | summary | No | Notion database ID to append summary data. If not provided, creates a new summary database | `summary="database_id"` |
 | debug | No | Enable debug mode for detailed logs. Default is false | `debug=true` |

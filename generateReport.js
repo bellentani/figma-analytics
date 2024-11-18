@@ -1,5 +1,6 @@
 require('dotenv').config(); // Load environment variables from the .env file
 const axios = require('axios');
+const https = require('https');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const moment = require('moment'); // For date manipulation
 const fs = require('fs');
@@ -45,6 +46,14 @@ args.forEach(arg => {
 // Remove '--debug', '--include-variants' and period from arguments if present
 const fileIds = args.filter(arg => arg !== '--debug' && arg !== '--include-variants' && !periodOptions.includes(arg) && !arg.startsWith('custom'));
 
+// Criar uma instância do Axios com configuração personalizada
+const axiosInstance = axios.create({
+    httpsAgent: new https.Agent({
+        rejectUnauthorized: false // Desabilita verificação de certificado
+    }),
+    timeout: 10000 // 10 segundos de timeout
+});
+
 // Function to calculate start dates based on the period
 function calculateStartDate(period) {
     let startDate;
@@ -81,20 +90,26 @@ const { startDate, endDate } = calculateStartDate(period);
 // Function to make API call to get file metadata (including the file name)
 async function fetchFileMetadata(libraryFileKey) {
     try {
-        const response = await axios.get(`${FIGMA_API_URL}${libraryFileKey}`, {
+        const response = await axiosInstance.get(`${FIGMA_API_URL}${libraryFileKey}`, {
             headers: {
                 'X-Figma-Token': FIGMA_TOKEN,
-            },
+            }
         });
+
+        if (DEBUG) {
+            console.log('File metadata response:', response.data);
+        }
 
         if (response.data && response.data.name) {
             return response.data.name;
-        } else {
-            console.warn(`Unexpected response when fetching metadata for file ${libraryFileKey}`);
-            return 'Unknown_Library_Name';
         }
+        return 'Unknown_Library_Name';
     } catch (error) {
-        console.error(`Error fetching file metadata for file ${libraryFileKey}:`, error.message);
+        console.error('Error details:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
         return 'Unknown_Library_Name';
     }
 }
@@ -102,33 +117,23 @@ async function fetchFileMetadata(libraryFileKey) {
 // Function to make API call to Components endpoint
 async function fetchComponents(libraryFileKey) {
     try {
-        const response = await axios.get(`${FIGMA_API_URL}${libraryFileKey}/components`, {
+        const response = await axiosInstance.get(`${FIGMA_API_URL}${libraryFileKey}/components`, {
             headers: {
                 'X-Figma-Token': FIGMA_TOKEN,
-            },
+            }
         });
 
         if (DEBUG) {
             console.log('Components API response:', JSON.stringify(response.data, null, 2));
         }
 
-        if (response.data && response.data.meta && response.data.meta.components) {
-            return response.data.meta.components.map(component => ({
-                ...component,
-                // Usar as datas retornadas pela API do Figma
-                created_at: component.created_at,
-                updated_at: component.updated_at,
-                // Manter os outros campos
-                component_name: component.name,
-                key: component.key,
-                description: component.description,
-                // ... outros campos
-            }));
-        }
-
-        return [];
+        return response.data?.meta?.components || [];
     } catch (error) {
-        console.error('Error fetching components:', error.message);
+        console.error('Error fetching components:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
         return [];
     }
 }
@@ -136,59 +141,29 @@ async function fetchComponents(libraryFileKey) {
 // Function to fetch and process component actions
 async function fetchComponentActions(fileId, startDate, endDate) {
     try {
-        console.log('\n=== COMPONENT ACTIONS DATA ===');
-        console.log('Fetching actions for period:', { startDate, endDate });
-        
-        const response = await axios.get(
-            `${FIGMA_ANALYTICS_URL}${fileId}/component/actions`,
-            {
-                headers: {
-                    'X-Figma-Token': FIGMA_TOKEN
-                },
-                params: {
-                    group_by: 'component',
-                    start_date: startDate,
-                    end_date: endDate
-                }
+        const response = await axiosInstance.get(`${FIGMA_ANALYTICS_URL}${fileId}/component/actions`, {
+            headers: {
+                'X-Figma-Token': FIGMA_TOKEN
+            },
+            params: {
+                group_by: 'component',
+                start_date: startDate,
+                end_date: endDate
             }
-        );
+        });
 
-        // Group actions by set name or component name
-        const actionsByName = (response.data?.rows || []).reduce((acc, row) => {
-            // Use component_set_name if available (for Sets) or component_name (for Singles)
-            const key = row.component_set_name || row.component_name;
-            
-            if (!acc[key]) {
-                acc[key] = {
-                    insertions: 0,
-                    detachments: 0,
-                    type: row.component_set_name ? 'Set' : 'Single'
-                };
-            }
-
-            acc[key].insertions += Number(row.insertions || 0);
-            acc[key].detachments += Number(row.detachments || 0);
-
-            return acc;
-        }, {});
-
-        // Debug log for processed data
-        console.log('\nFirst 3 processed actions:');
-        console.log(Object.entries(actionsByName).slice(0, 3).map(([name, data]) => ({
-            name,
-            type: data.type,
-            insertions: data.insertions,
-            detachments: data.detachments
-        })));
-
-        return actionsByName;
-    } catch (error) {
-        console.error('Error fetching component actions:', error.message);
-        if (error.response) {
-            console.error('Status:', error.response.status);
-            console.error('Data:', error.response.data);
+        if (DEBUG) {
+            console.log('Component actions response:', response.data);
         }
-        return {};
+
+        return response.data || [];
+    } catch (error) {
+        console.error('Error fetching component actions:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+        return [];
     }
 }
 
@@ -282,7 +257,7 @@ async function saveLogMarkdown(fileName, libraryName, totalComponents, totalVari
 // Function to fetch file metadata
 async function fetchFileMetadata(fileId) {
     try {
-        const response = await axios.get(`${FIGMA_API_URL}${fileId}`, {
+        const response = await axiosInstance.get(`${FIGMA_API_URL}${fileId}`, {
             headers: {
                 'X-Figma-Token': FIGMA_TOKEN,
             },
@@ -526,7 +501,7 @@ async function fetchComponentUsages(fileId) {
     try {
         console.log('\n=== COMPONENT USAGE DATA ===');
         
-        const response = await axios.get(
+        const response = await axiosInstance.get(
             `${FIGMA_ANALYTICS_URL}${fileId}/component/usages`,
             {
                 headers: {

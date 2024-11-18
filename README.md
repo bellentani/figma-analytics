@@ -56,22 +56,22 @@ This script requires a **Figma Enterprise Plan** due to its use of the Analytics
 
 Basic usage:
 ```bash
-npm run report files="tmTpuPqySUPu53Eqc16A76"
+npm run report files="fileId"
 ```
 
 With custom period:
 ```bash
-npm run report files="tmTpuPqySUPu53Eqc16A76" period="15d"
+npm run report files="fileId" period="15d"
 ```
 
 With Notion integration:
 ```bash
-npm run report files="tmTpuPqySUPu53Eqc16A76" notion="notion_page_id"
+npm run report files="fileId" notion="notion_page_id"
 ```
 
 With existing summary database:
 ```bash
-npm run report files="tmTpuPqySUPu53Eqc16A76" notion="notion_page_id" summary="summary_database_id"
+npm run report files="fileId" notion="notion_page_id" summary="summary_database_id"
 ```
 
 ## Output Files

@@ -365,37 +365,41 @@ function processComponents(components, actionsData, usages) {
     });
     
     const processedComponents = components.reduce((acc, component) => {
-        const setName = component.containing_frame?.name || component.name;
-        const componentName = component.name;
+        // Verifica se é um Set baseado no containingStateGroup
+        const isSet = component.containing_frame?.containingStateGroup;
+        const componentName = isSet 
+            ? component.containing_frame.containingStateGroup.name 
+            : component.name;
         
         // Initialize component if not exists
-        if (!acc[setName]) {
-            acc[setName] = {
-                component_name: setName,
+        if (!acc[componentName]) {
+            acc[componentName] = {
+                component_name: componentName,
                 total_variants: 0,
                 usages: 0,
                 insertions: 0,
                 detachments: 0,
                 updated_at: moment(component.updated_at).format('YYYY-MM-DD-HH-mm'),
                 created_at: moment(component.created_at).format('YYYY-MM-DD-HH-mm'),
-                type: 'Single'
+                type: isSet ? 'Set' : 'Single'
             };
         }
 
-        // Update variants count and type
-        acc[setName].total_variants++;
-        if (acc[setName].total_variants > 1) {
-            acc[setName].type = 'Set';
+        // Atualiza contagem de variantes apenas se for Set
+        if (isSet) {
+            acc[componentName].total_variants++;
+        } else {
+            acc[componentName].total_variants = 'N/A';
         }
 
         // Add usage data based on component key
-        acc[setName].usages += Number(usages[component.key]?.usages || 0);
+        acc[componentName].usages += Number(usages[component.key]?.usages || 0);
 
         // Add actions data based on set name or component name
-        const actionKey = acc[setName].type === 'Set' ? setName : componentName;
+        const actionKey = isSet ? componentName : component.name;
         if (actionsData[actionKey]) {
-            acc[setName].insertions = Number(actionsData[actionKey].insertions || 0);
-            acc[setName].detachments = Number(actionsData[actionKey].detachments || 0);
+            acc[componentName].insertions = Number(actionsData[actionKey].insertions || 0);
+            acc[componentName].detachments = Number(actionsData[actionKey].detachments || 0);
         }
 
         return acc;
@@ -410,7 +414,7 @@ function processComponents(components, actionsData, usages) {
     result.forEach(comp => {
         if (comp.insertions > 0 || comp.detachments > 0) {
             console.log(`${comp.component_name} (${comp.type}):`, {
-                variants: comp.total_variants === 1 ? 'N/A' : comp.total_variants,
+                variants: comp.total_variants === 'N/A' ? 'N/A' : comp.total_variants,
                 insertions: comp.insertions,
                 detachments: comp.detachments || 0
             });
@@ -424,7 +428,7 @@ function processComponents(components, actionsData, usages) {
     result.forEach(comp => {
         console.log(
             `${comp.component_name.padEnd(20)} | ` +
-            `${(comp.total_variants === 1 ? 'N/A' : String(comp.total_variants)).padEnd(14)} | ` +
+            `${(comp.total_variants === 'N/A' ? 'N/A' : String(comp.total_variants)).padEnd(14)} | ` +
             `${String(comp.usages).padEnd(13)} | ` +
             `${String(comp.insertions || 0).padEnd(15)} | ` +
             `${String(comp.detachments || 0).padEnd(14)} | ` +
@@ -432,14 +436,7 @@ function processComponents(components, actionsData, usages) {
         );
     });
 
-    // Prepare data for CSV
-    const csvData = result.map(comp => ({
-        ...comp,
-        total_variants: comp.total_variants === 1 ? 'N/A' : comp.total_variants,
-        detachments: comp.detachments || 0
-    }));
-
-    return csvData;
+    return result;
 }
 
 // Main function to generate component report

@@ -5,6 +5,8 @@ const moment = require('moment'); // For date manipulation
 const fs = require('fs');
 const { performance } = require('perf_hooks'); // For measuring execution time
 const { createNotionDatabase, addComponentsToNotion, handleReportSummaryDatabase } = require('./src/integrations/notion-integration');
+const https = require('https');
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 // Figma API settings
 const FIGMA_API_URL = 'https://api.figma.com/v1/files/';

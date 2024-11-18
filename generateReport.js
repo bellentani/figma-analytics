@@ -5,6 +5,12 @@ const moment = require('moment'); // For date manipulation
 const fs = require('fs');
 const { performance } = require('perf_hooks'); // For measuring execution time
 const { createNotionDatabase, addComponentsToNotion, handleReportSummaryDatabase } = require('./src/integrations/notion-integration');
+const {
+    fetchFileMetadata,
+    fetchComponents,
+    fetchComponentActions,
+    fetchComponentUsages
+} = require('./src/services/figma-api');
 
 // Figma API settings
 const FIGMA_API_URL = 'https://api.figma.com/v1/files/';
@@ -77,120 +83,6 @@ function calculateStartDate(period) {
 }
 
 const { startDate, endDate } = calculateStartDate(period);
-
-// Function to make API call to get file metadata (including the file name)
-async function fetchFileMetadata(libraryFileKey) {
-    try {
-        const response = await axios.get(`${FIGMA_API_URL}${libraryFileKey}`, {
-            headers: {
-                'X-Figma-Token': FIGMA_TOKEN,
-            },
-        });
-
-        if (response.data && response.data.name) {
-            return response.data.name;
-        } else {
-            console.warn(`Unexpected response when fetching metadata for file ${libraryFileKey}`);
-            return 'Unknown_Library_Name';
-        }
-    } catch (error) {
-        console.error(`Error fetching file metadata for file ${libraryFileKey}:`, error.message);
-        return 'Unknown_Library_Name';
-    }
-}
-
-// Function to make API call to Components endpoint
-async function fetchComponents(libraryFileKey) {
-    try {
-        const response = await axios.get(`${FIGMA_API_URL}${libraryFileKey}/components`, {
-            headers: {
-                'X-Figma-Token': FIGMA_TOKEN,
-            },
-        });
-
-        if (DEBUG) {
-            console.log('Components API response:', JSON.stringify(response.data, null, 2));
-        }
-
-        if (response.data && response.data.meta && response.data.meta.components) {
-            return response.data.meta.components.map(component => ({
-                ...component,
-                // Usar as datas retornadas pela API do Figma
-                created_at: component.created_at,
-                updated_at: component.updated_at,
-                // Manter os outros campos
-                component_name: component.name,
-                key: component.key,
-                description: component.description,
-                // ... outros campos
-            }));
-        }
-
-        return [];
-    } catch (error) {
-        console.error('Error fetching components:', error.message);
-        return [];
-    }
-}
-
-// Function to fetch and process component actions
-async function fetchComponentActions(fileId, startDate, endDate) {
-    try {
-        console.log('\n=== COMPONENT ACTIONS DATA ===');
-        console.log('Fetching actions for period:', { startDate, endDate });
-        
-        const response = await axios.get(
-            `${FIGMA_ANALYTICS_URL}${fileId}/component/actions`,
-            {
-                headers: {
-                    'X-Figma-Token': FIGMA_TOKEN
-                },
-                params: {
-                    group_by: 'component',
-                    start_date: startDate,
-                    end_date: endDate
-                }
-            }
-        );
-
-        // Group actions by set name or component name
-        const actionsByName = (response.data?.rows || []).reduce((acc, row) => {
-            // Use component_set_name if available (for Sets) or component_name (for Singles)
-            const key = row.component_set_name || row.component_name;
-            
-            if (!acc[key]) {
-                acc[key] = {
-                    insertions: 0,
-                    detachments: 0,
-                    type: row.component_set_name ? 'Set' : 'Single'
-                };
-            }
-
-            acc[key].insertions += Number(row.insertions || 0);
-            acc[key].detachments += Number(row.detachments || 0);
-
-            return acc;
-        }, {});
-
-        // Debug log for processed data
-        console.log('\nFirst 3 processed actions:');
-        console.log(Object.entries(actionsByName).slice(0, 3).map(([name, data]) => ({
-            name,
-            type: data.type,
-            insertions: data.insertions,
-            detachments: data.detachments
-        })));
-
-        return actionsByName;
-    } catch (error) {
-        console.error('Error fetching component actions:', error.message);
-        if (error.response) {
-            console.error('Status:', error.response.status);
-            console.error('Data:', error.response.data);
-        }
-        return {};
-    }
-}
 
 // Function to save component names in a CSV
 async function extractDataToCSV(components, fileName) {
@@ -276,34 +168,6 @@ async function saveLogMarkdown(fileName, libraryName, totalComponents, totalVari
         console.log(`Generation log successfully created: ${logFilePath}`);
     } catch (error) {
         console.error(`Error writing log file ${logFilePath}:`, error.message);
-    }
-}
-
-// Function to fetch file metadata
-async function fetchFileMetadata(fileId) {
-    try {
-        const response = await axios.get(`${FIGMA_API_URL}${fileId}`, {
-            headers: {
-                'X-Figma-Token': FIGMA_TOKEN,
-            },
-        });
-
-        if (response.data && response.data.name) {
-            return response.data.name;
-        } else {
-            console.warn(`Unexpected response when fetching metadata for file ${fileId}`);
-            return 'Unknown Library';
-        }
-    } catch (error) {
-        if (error.response) {
-            console.error(`Error fetching file metadata for ${fileId}: Status ${error.response.status}`);
-            console.error('Error response data:', JSON.stringify(error.response.data, null, 2));
-        } else if (error.request) {
-            console.error('No response received from API:', error.request);
-        } else {
-            console.error('Error setting up request:', error.message);
-        }
-        return 'Unknown Library';
     }
 }
 
@@ -442,26 +306,45 @@ function processComponents(components, actionsData, usages) {
 
 // Main function to generate component report
 async function generateComponentReport(fileId, startDate, endDate, period, notionPageId, summaryDatabaseId = null, debug = false) {
-    const executionStartTime = process.hrtime();
-    
     try {
         console.log('Starting report generation...');
-        
-        // Fetch library name
-        const libraryName = await fetchFileMetadata(fileId);
-        console.log('Library name:', libraryName);
+        let components = [];
+        let actionsData = {};
+        let usages = {};
 
-        // Fetch components
-        const components = await fetchComponents(fileId);
-        console.log('Components found:', components.length);
+        // Buscar metadados e componentes
+        try {
+            const fileMetadata = await fetchFileMetadata(fileId);
+            const libraryName = fileMetadata.name || 'Unknown Library';
+            console.log('Library name:', libraryName);
 
-        // Fetch component actions
-        const actionsData = await fetchComponentActions(fileId, startDate, endDate);
-        console.log('Action data found:', Object.keys(actionsData).length);
-        
-        // Fetch usage data
-        const usages = await fetchComponentUsages(fileId);
-        console.log('Usage data found:', Object.keys(usages).length);
+            components = await fetchComponents(fileId);
+            console.log('Components found:', components.length);
+        } catch (error) {
+            console.error('Error fetching file data:', error.message);
+            throw error;
+        }
+
+        // Buscar ações dos componentes
+        try {
+            console.log('\n=== COMPONENT ACTIONS DATA ===');
+            console.log('Fetching actions for period:', { startDate, endDate });
+            actionsData = await fetchComponentActions(fileId, startDate, endDate);
+            console.log('Actions data processed for components:', Object.keys(actionsData).length);
+        } catch (error) {
+            console.error('Warning: Error fetching actions data:', error.message);
+            // Continuar com actionsData vazio
+        }
+
+        // Buscar usos dos componentes
+        try {
+            console.log('\n=== COMPONENT USAGE DATA ===');
+            usages = await fetchComponentUsages(fileId);
+            console.log('Usage data found for components:', Object.keys(usages).length);
+        } catch (error) {
+            console.error('Warning: Error fetching usage data:', error.message);
+            // Continuar com usages vazio
+        }
 
         // Process and aggregate components
         const reportData = processComponents(components, actionsData, usages);
@@ -516,45 +399,8 @@ async function generateComponentReport(fileId, startDate, endDate, period, notio
         console.log('Report generated successfully!');
         return { reportData, summary };
     } catch (error) {
-        console.error('Error generating report:', error);
+        console.error('Error generating report:', error.message);
         throw error;
-    }
-}
-
-// Function to fetch and process component usages
-async function fetchComponentUsages(fileId) {
-    try {
-        console.log('\n=== COMPONENT USAGE DATA ===');
-        
-        const response = await axios.get(
-            `${FIGMA_ANALYTICS_URL}${fileId}/component/usages`,
-            {
-                headers: {
-                    'X-Figma-Token': FIGMA_TOKEN
-                },
-                params: {
-                    group_by: 'component'
-                }
-            }
-        );
-
-        // Process usages by component key
-        const usagesByKey = {};
-        (response.data?.rows || []).forEach(row => {
-            if (!row.component_key) return;
-            usagesByKey[row.component_key] = {
-                usages: parseInt(row.usages) || 0
-            };
-        });
-
-        // Debug log for processed data
-        console.log('\nFirst 3 processed usages:');
-        console.log(Object.entries(usagesByKey).slice(0, 3));
-
-        return usagesByKey;
-    } catch (error) {
-        console.error('Error fetching component usages:', error.message);
-        return {};
     }
 }
 

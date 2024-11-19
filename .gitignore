@@ -1,4 +1,5 @@
-/reports/*.*
+/reports/*/*.*
 /node_modules
+*.csv
 *.env
 .DS_Store

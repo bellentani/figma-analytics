@@ -2,6 +2,8 @@ const { Client } = require('@notionhq/client');
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const moment = require('moment');
 
+let consolidatedDatabaseId = null;
+
 async function createNotionDatabase(parentPageId, period = '30d', libraryName, reportDate) {
     try {
         console.log('Creating Notion database...');
@@ -339,8 +341,176 @@ async function addSummaryEntry(databaseId, summary) {
     }
 }
 
+async function createConsolidatedNotionDatabase(parentPageId, period, reportDate) {
+    try {
+        console.log('Creating consolidated Notion database...');
+        
+        const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
+        const databaseTitle = `Report Consolidated - All - ${period} - ${timestamp} - In Progress`;
+        
+        const response = await notion.databases.create({
+            parent: {
+                type: 'page_id',
+                page_id: parentPageId
+            },
+            title: [
+                {
+                    type: 'text',
+                    text: {
+                        content: databaseTitle
+                    }
+                }
+            ],
+            properties: {
+                "Component Name": {
+                    title: {}
+                },
+                "Total Variants": {
+                    number: {
+                        format: "number"
+                    }
+                },
+                "Usages": {
+                    number: {
+                        format: "number"
+                    }
+                },
+                "Insertions": {
+                    number: {
+                        format: "number"
+                    }
+                },
+                "Detachments": {
+                    number: {
+                        format: "number"
+                    }
+                },
+                "Created At": {
+                    date: {}
+                },
+                "Updated At": {
+                    date: {}
+                },
+                "Type": {
+                    select: {
+                        options: [
+                            { name: 'Single', color: 'blue' },
+                            { name: 'Set', color: 'green' }
+                        ]
+                    }
+                },
+                "Report Creation Date": {
+                    date: {}
+                },
+                "Lib File": {
+                    rich_text: {}
+                }
+            }
+        });
+
+        consolidatedDatabaseId = response.id;
+        console.log('Consolidated database created successfully:', databaseTitle);
+        return response.id;
+    } catch (error) {
+        console.error('Error creating consolidated Notion database:', error);
+        throw error;
+    }
+}
+
+async function addComponentToConsolidatedNotion(component) {
+    if (!consolidatedDatabaseId) {
+        console.error('Consolidated database ID not found');
+        return;
+    }
+
+    try {
+        const pageData = {
+            parent: { database_id: consolidatedDatabaseId },
+            properties: {
+                "Component Name": {
+                    title: [{ text: { content: component.component_name || 'Unnamed Component' } }]
+                },
+                "Total Variants": {
+                    number: Number(component.total_variants) || 0
+                },
+                "Usages": {
+                    number: Number(component.usages) || 0
+                },
+                "Insertions": {
+                    number: Number(component.insertions) || 0
+                },
+                "Detachments": {
+                    number: Number(component.detachments) || 0
+                },
+                "Created At": {
+                    date: { 
+                        start: formatToISO(component.created_at)
+                    }
+                },
+                "Updated At": {
+                    date: { 
+                        start: formatToISO(component.updated_at)
+                    }
+                },
+                "Type": {
+                    select: {
+                        name: component.type || 'Unknown'
+                    }
+                },
+                "Report Creation Date": {
+                    date: { 
+                        start: moment().format('YYYY-MM-DD')
+                    }
+                },
+                "Lib File": {
+                    rich_text: [{ 
+                        text: { 
+                            content: component.lib_file || 'Unknown Library'
+                        } 
+                    }]
+                }
+            }
+        };
+
+        await notion.pages.create(pageData);
+    } catch (error) {
+        console.error(`Error adding component to consolidated database:`, error.message);
+    }
+}
+
+async function finalizeConsolidatedDatabase() {
+    if (!consolidatedDatabaseId) {
+        console.error('No consolidated database to finalize');
+        return;
+    }
+
+    try {
+        const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
+        const newTitle = `Report Consolidated - All - ${period} - ${timestamp} - Done`;
+
+        await notion.databases.update({
+            database_id: consolidatedDatabaseId,
+            title: [
+                {
+                    type: 'text',
+                    text: {
+                        content: newTitle
+                    }
+                }
+            ]
+        });
+
+        console.log('Consolidated database finalized successfully');
+    } catch (error) {
+        console.error('Error finalizing consolidated database:', error);
+    }
+}
+
 module.exports = {
     createNotionDatabase,
     addComponentsToNotion,
-    handleReportSummaryDatabase
+    handleReportSummaryDatabase,
+    createConsolidatedNotionDatabase,
+    addComponentToConsolidatedNotion,
+    finalizeConsolidatedDatabase
 }; 

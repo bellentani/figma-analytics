@@ -346,7 +346,7 @@ async function createConsolidatedNotionDatabase(parentPageId, period, reportDate
         console.log('Creating consolidated Notion database...');
         
         const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
-        const databaseTitle = `Report Consolidated - All - ${period} - ${timestamp} - In Progress`;
+        const databaseTitle = `Report Consolidated - All - ${period} - ${timestamp}`;
         
         const response = await notion.databases.create({
             parent: {

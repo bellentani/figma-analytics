@@ -50,29 +50,37 @@ This script requires a **Figma Enterprise Plan** due to its use of the Analytics
 | period | No | Period to analyze data. Can be "30d", "60d", "90d" or custom range with dates in format YYYY-MM-DD. Default is "30d" | `period="30d"` or `period="2024-01-01,2024-01-31"` |
 | notion | No | Notion page ID to create the report database | `notion="page_id"` |
 | summary | No | Notion database ID to append summary data. If not provided, creates a new summary database | `summary="database_id"` |
-| debug | No | Enable debug mode for detailed logs. Default is false | `debug=true` |
+| --debug | No | Flag to enable debug mode for detailed logs | `--debug` |
+| --consolidated | No | Flag to generate a consolidated report combining data from all files | `--consolidated` |
 
 ## Usage Examples
 
 Basic usage:
 ```bash
-npm run report files="fileId"
+npm run report -- files="fileId"
 ```
 
 With custom period:
 ```bash
-npm run report files="fileId" period="15d"
+npm run report -- files="fileId" period="2024-01-01,2024-01-31"
 ```
 
 With Notion integration:
 ```bash
-npm run report files="fileId" notion="notion_page_id"
+npm run report -- files="fileId" notion="notion_page_id" summary="summary_database_id"
 ```
 
-With existing summary database:
+With consolidated report and debug mode:
 ```bash
-npm run report files="fileId" notion="notion_page_id" summary="summary_database_id"
+npm run report -- files="fileId1,fileId2,fileId3" notion="notion_page_id" --consolidated --debug
 ```
+
+Complete example with all parameters:
+```bash
+npm run report -- files="fileId1,fileId2" period="2024-01-01,2024-01-31" notion="notion_page_id" summary="summary_database_id" --consolidated --debug
+```
+
+Note: The `--` after `npm run report` is required to pass flags correctly to the script.
 
 ## Output Files
 

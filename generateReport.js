@@ -521,7 +521,7 @@ async function generateComponentReport(fileId, startDate, endDate, period, notio
         console.log('Report data prepared:', reportData.length);
 
         // Add current report data to allReportData and Notion consolidated database
-        reportData.forEach(async (data) => {
+        for (const data of reportData) {
             const enrichedData = {
                 ...data,
                 lib_file: libraryName
@@ -530,9 +530,13 @@ async function generateComponentReport(fileId, startDate, endDate, period, notio
 
             // If Notion integration is enabled and consolidated report is requested
             if (process.env.NOTION_TOKEN && notionPageId && isConsolidated) {
-                await addComponentToConsolidatedNotion(enrichedData);
+                try {
+                    await addComponentToConsolidatedNotion(enrichedData);
+                } catch (error) {
+                    console.error(`Error adding component to consolidated Notion database: ${enrichedData.component_name}`, error);
+                }
             }
-        });
+        }
 
         // Generate filename
         const timestamp = moment().format('YYYY-MM-DD-HH-mm');

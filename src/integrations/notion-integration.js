@@ -362,36 +362,36 @@ async function createConsolidatedNotionDatabase(parentPageId, period, reportDate
                 }
             ],
             properties: {
-                "Component Name": {
+                "01. Component Name": {
                     title: {}
                 },
-                "Total Variants": {
+                "02. Total Variants": {
                     number: {
                         format: "number"
                     }
                 },
-                "Usages": {
+                "03. Usages": {
                     number: {
                         format: "number"
                     }
                 },
-                "Insertions": {
+                "04. Insertions": {
                     number: {
                         format: "number"
                     }
                 },
-                "Detachments": {
+                "05. Detachments": {
                     number: {
                         format: "number"
                     }
                 },
-                "Created At": {
+                "06. Created At": {
                     date: {}
                 },
-                "Updated At": {
+                "07. Updated At": {
                     date: {}
                 },
-                "Type": {
+                "08. Type": {
                     select: {
                         options: [
                             { name: 'Single', color: 'blue' },
@@ -399,11 +399,11 @@ async function createConsolidatedNotionDatabase(parentPageId, period, reportDate
                         ]
                     }
                 },
-                "Report Creation Date": {
+                "09. Report Creation Date": {
                     date: {}
                 },
-                "Lib File": {
-                    rich_text: {}
+                "10. Lib File": {
+                    multi_select: {}
                 }
             }
         });
@@ -424,57 +424,89 @@ async function addComponentToConsolidatedNotion(component) {
     }
 
     try {
+        console.log(`Adding component to consolidated database: ${component.component_name}`);
+        
+        // Helper function to ensure valid ISO date
+        const formatToValidISO = (dateString) => {
+            if (!dateString) {
+                return moment().format('YYYY-MM-DD');
+            }
+            
+            // Handle YYYY-MM-DD-HH-MM format
+            const matches = dateString.match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})$/);
+            if (matches) {
+                const [_, year, month, day, hour, minute] = matches;
+                return `${year}-${month}-${day}`;
+            }
+            
+            // Try parsing as regular date
+            const date = moment(dateString);
+            if (!date.isValid()) {
+                console.warn(`Invalid date found for component ${component.component_name}:`, dateString);
+                return moment().format('YYYY-MM-DD');
+            }
+            
+            return date.format('YYYY-MM-DD');
+        };
+
         const pageData = {
             parent: { database_id: consolidatedDatabaseId },
             properties: {
-                "Component Name": {
+                "01. Component Name": {
                     title: [{ text: { content: component.component_name || 'Unnamed Component' } }]
                 },
-                "Total Variants": {
-                    number: Number(component.total_variants) || 0
+                "02. Total Variants": {
+                    number: component.total_variants === 'N/A' ? 0 : Number(component.total_variants) || 0
                 },
-                "Usages": {
+                "03. Usages": {
                     number: Number(component.usages) || 0
                 },
-                "Insertions": {
+                "04. Insertions": {
                     number: Number(component.insertions) || 0
                 },
-                "Detachments": {
+                "05. Detachments": {
                     number: Number(component.detachments) || 0
                 },
-                "Created At": {
+                "06. Created At": {
                     date: { 
-                        start: formatToISO(component.created_at)
+                        start: formatToValidISO(component.created_at)
                     }
                 },
-                "Updated At": {
+                "07. Updated At": {
                     date: { 
-                        start: formatToISO(component.updated_at)
+                        start: formatToValidISO(component.updated_at)
                     }
                 },
-                "Type": {
+                "08. Type": {
                     select: {
                         name: component.type || 'Unknown'
                     }
                 },
-                "Report Creation Date": {
+                "09. Report Creation Date": {
                     date: { 
                         start: moment().format('YYYY-MM-DD')
                     }
                 },
-                "Lib File": {
-                    rich_text: [{ 
-                        text: { 
-                            content: component.lib_file || 'Unknown Library'
-                        } 
-                    }]
+                "10. Lib File": {
+                    multi_select: [
+                        { name: component.lib_file || 'Unknown Library' }
+                    ]
                 }
             }
         };
 
         await notion.pages.create(pageData);
+        console.log(`✓ Component ${component.component_name} added to consolidated database`);
     } catch (error) {
-        console.error(`Error adding component to consolidated database:`, error.message);
+        console.error(`Error adding component ${component.component_name} to consolidated database:`, error.message);
+        if (error.message.includes('date')) {
+            console.error('Date values:', {
+                created_at: component.created_at,
+                updated_at: component.updated_at,
+                formatted_created: formatToValidISO(component.created_at),
+                formatted_updated: formatToValidISO(component.updated_at)
+            });
+        }
     }
 }
 

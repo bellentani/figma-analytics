@@ -445,6 +445,14 @@ let allReportData = [];
 // Função para gerar relatório consolidado
 async function generateConsolidatedReport(allReportData, period) {
     const timestamp = moment().format('YYYY-MM-DD-HH-mm-ss');
+    const reportCreationDate = moment().format('YYYY-MM-DD-HH-mm');
+
+    // Adiciona a data de criação do relatório para cada item
+    const enrichedReportData = allReportData.map(item => ({
+        ...item,
+        report_creation_date: reportCreationDate
+    }));
+
     const fileName = `Report Consolidated - All - ${period} - ${timestamp}.csv`;
 
     const csvWriter = createCsvWriter({
@@ -458,12 +466,13 @@ async function generateConsolidatedReport(allReportData, period) {
             { id: 'created_at', title: 'Created At' },
             { id: 'updated_at', title: 'Updated At' },
             { id: 'type', title: 'Type' },
+            { id: 'report_creation_date', title: 'Report Creation Date' },
             { id: 'lib_file', title: 'Lib File' }
         ]
     });
 
     console.log('Writing consolidated CSV file...');
-    await csvWriter.writeRecords(allReportData);
+    await csvWriter.writeRecords(enrichedReportData);
     console.log(`Consolidated CSV generated successfully: ${REPORTS_DIR}/${fileName}`);
 }
 
